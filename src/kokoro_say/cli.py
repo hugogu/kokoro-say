@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import filecmp
 import hashlib
 import itertools
@@ -208,47 +209,14 @@ def load_kokoro(folder: Path):
     return Kokoro.from_session(session, voices)
 
 
-def player_command(path: str) -> list[str] | None:
-    """A command that plays a WAV file on this system, if one is installed."""
-    system = platform.system()
-    if system == "Darwin":
-        return ["afplay", path]
-    if system == "Linux":
-        for command in (
-            ["paplay", path],
-            ["aplay", "-q", path],
-            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", path],
-        ):
-            if shutil.which(command[0]):
-                return command
-    return None
-
-
-def play(samples, rate: int) -> None:
-    import soundfile as sf
-
-    with tempfile.TemporaryDirectory() as folder:
-        path = str(Path(folder) / "speech.wav")
-        sf.write(path, samples, rate)
-        if platform.system() == "Windows":
-            import winsound
-
-            winsound.PlaySound(path, winsound.SND_FILENAME)
-            return
-        command = player_command(path)
-        if command is None:
-            raise RuntimeError("no audio player found; save to a file with -o")
-        subprocess.run(command, check=True)
-
-
 def open_output(rate: int):
     """A mono stream on the default audio device; kept separate for tests."""
     try:
         import sounddevice as sd
     except OSError as error:  # sounddevice loads PortAudio as it is imported
         raise RuntimeError(
-            "--stream needs PortAudio; on Debian or Ubuntu: "
-            "sudo apt install libportaudio2"
+            "playing speech needs PortAudio; on Debian or Ubuntu: "
+            "sudo apt install libportaudio2, or save it with -o"
         ) from error
     try:
         return sd.OutputStream(samplerate=rate, channels=1, dtype="float32")
@@ -256,29 +224,39 @@ def open_output(rate: int):
         raise RuntimeError(f"cannot open the audio output: {error}") from error
 
 
-def stream(parts: AsyncIterable) -> None:
+@contextlib.contextmanager
+def speaker():
+    """The default audio device, opened before any speech is generated.
+
+    Opening it first makes a missing device fail at once, and samples go
+    straight to it instead of through a file and a player process. Python
+    would turn Ctrl-C into an exception and then wait for the batch still
+    being synthesized, so Ctrl-C keeps its default action and ends the process.
+    """
+    output = open_output(SAMPLE_RATE)
+    interrupt = signal.signal(signal.SIGINT, signal.SIG_DFL)
+    try:
+        output.start()
+        yield output
+        output.stop()  # returns once the buffered audio has played
+    finally:
+        signal.signal(signal.SIGINT, interrupt)
+        output.close()  # discards whatever an error left unplayed
+
+
+def stream(output, parts: AsyncIterable) -> None:
     """Play the parts of Kokoro.create_stream while later ones are generated.
 
     kokoro-onnx synthesizes the next part while one plays, and one output
     stream carries them all, so they join without a gap whenever synthesis
     keeps ahead of playback.
     """
-    output = open_output(SAMPLE_RATE)  # first, so a missing device fails fast
 
     async def play() -> None:
         async for samples, _ in parts:
             output.write(samples)
 
-    # Python would turn Ctrl-C into an exception and then wait for the batch
-    # still being synthesized; the default action ends the process at once.
-    interrupt = signal.signal(signal.SIGINT, signal.SIG_DFL)
-    try:
-        output.start()
-        asyncio.run(play())
-        output.stop()  # returns once the buffered audio has played
-    finally:
-        signal.signal(signal.SIGINT, interrupt)
-        output.close()  # discards whatever an error left unplayed
+    asyncio.run(play())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -342,23 +320,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not text.strip():
             parser.error("there is no text to speak")
         lang = args.lang or language_for(args.voice)
-        if args.stream:
-            parts = kokoro.create_stream(
-                text, voice=args.voice, speed=args.speed, lang=lang
-            )
-            stream(parts)
-            return 0
-        samples, rate = kokoro.create(
-            text, voice=args.voice, speed=args.speed, lang=lang
-        )
         if args.output:
             import soundfile as sf
 
+            samples, rate = kokoro.create(
+                text, voice=args.voice, speed=args.speed, lang=lang
+            )
             sf.write(args.output, samples, rate)
             print(f"saved {args.output} ({len(samples) / rate:.2f}s)", file=sys.stderr)
-        else:
-            play(samples, rate)
-    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+            return 0
+        with speaker() as output:
+            if args.stream:
+                parts = kokoro.create_stream(
+                    text, voice=args.voice, speed=args.speed, lang=lang
+                )
+                stream(output, parts)
+            else:
+                samples, _ = kokoro.create(
+                    text, voice=args.voice, speed=args.speed, lang=lang
+                )
+                output.write(samples)
+    except (OSError, RuntimeError) as error:
         print(f"kokoro-say: {error}", file=sys.stderr)
         return 1
     return 0

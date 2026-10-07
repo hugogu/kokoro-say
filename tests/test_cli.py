@@ -111,12 +111,22 @@ def test_reads_text_from_stdin(kokoro, monkeypatch, tmp_path):
     assert kokoro.calls[0][0] == "Piped in."
 
 
-def test_plays_when_there_is_no_output_file(kokoro, monkeypatch):
-    played = []
-    monkeypatch.setattr(cli, "play", lambda samples, rate: played.append(rate))
+def test_plays_when_there_is_no_output_file(kokoro, output):
     assert cli.main(["Hello", "-s", "1.2"]) == 0
-    assert played == [24_000]
     assert kokoro.calls[0][2] == 1.2
+    assert output.rate == 24_000
+    assert output.calls == ["start", "stop", "close"]
+    assert [len(samples) for samples in output.written] == [24_000]
+
+
+def test_fails_before_synthesis_without_an_audio_device(kokoro, monkeypatch, capsys):
+    def no_device(rate):
+        raise RuntimeError("cannot open the audio output: no device")
+
+    monkeypatch.setattr(cli, "open_output", no_device)
+    assert cli.main(["Hello"]) == 1
+    assert kokoro.calls == []  # nothing synthesized for nobody to hear
+    assert "cannot open the audio output" in capsys.readouterr().err
 
 
 def test_streams_the_parts_through_one_output(kokoro, output):
@@ -129,7 +139,8 @@ def test_streams_the_parts_through_one_output(kokoro, output):
         np.testing.assert_array_equal(written, part)
 
 
-def test_ctrl_c_ends_a_stream_at_once(kokoro, output, monkeypatch):
+@pytest.mark.parametrize("argv", [["Hello"], ["Hello", "--stream"]])
+def test_ctrl_c_ends_speech_at_once(kokoro, output, monkeypatch, argv):
     handlers = []
 
     def write(samples):
@@ -137,7 +148,7 @@ def test_ctrl_c_ends_a_stream_at_once(kokoro, output, monkeypatch):
 
     monkeypatch.setattr(output, "write", write)
     before = signal.getsignal(signal.SIGINT)
-    assert cli.main(["Hello", "--stream"]) == 0
+    assert cli.main(argv) == 0
     # The default action ends the process; Python's would wait for synthesis.
     assert set(handlers) == {signal.SIG_DFL}
     assert signal.getsignal(signal.SIGINT) is before
@@ -186,18 +197,6 @@ def test_rejects_a_download_that_fails_its_checksum(tmp_path):
     with pytest.raises(RuntimeError, match="checksum"):
         cli.ensure_model(tmp_path / "models", files)
     assert list((tmp_path / "models").iterdir()) == []
-
-
-def test_finds_an_audio_player(monkeypatch):
-    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
-    assert cli.player_command("a.wav") == ["afplay", "a.wav"]
-    monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(
-        cli.shutil, "which", lambda name: "/usr/bin/aplay" if name == "aplay" else None
-    )
-    assert cli.player_command("a.wav") == ["aplay", "-q", "a.wav"]
-    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
-    assert cli.player_command("a.wav") is None
 
 
 def test_explains_a_missing_portaudio(monkeypatch):

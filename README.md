@@ -52,14 +52,13 @@ English, `e` Spanish, `f` French, `h` Hindi, `i` Italian, `j` Japanese,
 The English voices sound best; kokoro-onnx turns text into sounds with
 espeak-ng, which is weaker for Japanese and Chinese than Kokoro's own `misaki`.
 
-Playback uses `afplay` on macOS, `paplay`, `aplay` or `ffplay` on Linux, and
-`winsound` on Windows, once the whole passage has been generated. `--stream`
-starts sooner on long text: kokoro-onnx generates speech in batches of up to
-about half a minute, and each batch plays while the next one is generated,
-joined without a gap as long as generation runs faster than speech. Text
-shorter than one batch gains nothing. Streaming plays through PortAudio, which
-the sounddevice wheels include on macOS and Windows; on Linux install it first,
-for example `sudo apt install libportaudio2`.
+Speech plays through PortAudio, which the sounddevice wheels include on macOS
+and Windows; on Linux install it first, for example
+`sudo apt install libportaudio2`. It starts once the whole passage has been
+generated, or sooner on long text with `--stream`: kokoro-onnx generates speech
+in batches of up to about half a minute, and each batch plays while the next
+one is generated, joined without a gap as long as generation runs faster than
+speech. Text shorter than one batch gains nothing.
 
 ## Related tools
 

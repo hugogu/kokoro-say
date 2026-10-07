@@ -8,10 +8,10 @@
   each new library file once, 0.45 to 0.8 s apiece. `reuse_espeak_copies` keeps
   the copies in `~/.cache/kokoro-say`. Time each stage before blaming the model
   when start-up slows down.
-- `--stream` gives SIGINT its default action while it plays. Python's
-  KeyboardInterrupt would wait for the batch onnxruntime is synthesizing on a
-  worker thread, which cannot be interrupted, and a process that exits with 130
-  instead of dying of SIGINT lets a calling shell loop carry on to its next
+- `speaker()` gives SIGINT its default action while kokoro-say generates and
+  plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
+  is synthesizing, which cannot be interrupted, and a process that exits with
+  130 instead of dying of SIGINT lets a calling shell loop carry on to its next
   turn.
 - Before pushing, run `uv run ruff check`, `uv run ruff format --check` and
   `uv run pytest`. CI runs them on Linux, macOS and Windows, each with the oldest
