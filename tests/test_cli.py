@@ -2,6 +2,7 @@ import hashlib
 import io
 import shutil
 import signal
+import subprocess
 import sys
 import tempfile
 import types
@@ -226,6 +227,23 @@ def test_explains_a_missing_audio_device(monkeypatch):
         cli.open_output(24_000)
 
 
+@pytest.mark.parametrize(
+    ("system", "code", "out", "cores"),
+    [
+        ("Darwin", 0, "8\n", 8),  # Apple silicon
+        ("Darwin", 1, "", None),  # an Intel Mac has one kind of core
+        ("Linux", 0, "8\n", None),
+    ],
+)
+def test_counts_the_performance_cores(monkeypatch, system, code, out, cores):
+    def sysctl(command, **options):
+        return subprocess.CompletedProcess(command, code, stdout=out)
+
+    monkeypatch.setattr(cli.platform, "system", lambda: system)
+    monkeypatch.setattr(cli.subprocess, "run", sysctl)
+    assert cli.performance_cores() == cores
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra rights")
 def test_shortens_a_long_espeak_data_path(monkeypatch, tmp_path):
     import espeakng_loader
@@ -276,6 +294,13 @@ def test_keeps_espeak_library_copies_between_runs(monkeypatch, tmp_path):
     assert run() == first  # the next run loads the very same files
     library.write_bytes(b"espeak, upgraded")
     assert run() != first  # while a changed library is copied afresh
+
+
+@needs_model
+def test_loads_the_real_model_on_the_performance_cores():
+    kokoro = cli.load_kokoro(cli.model_dir())
+    threads = kokoro.sess.get_session_options().intra_op_num_threads
+    assert threads == (cli.performance_cores() or 0)  # 0: onnxruntime decides
 
 
 @needs_model

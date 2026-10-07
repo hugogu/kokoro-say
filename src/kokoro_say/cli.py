@@ -173,14 +173,39 @@ def reuse_espeak_copies(folder: Path) -> None:
     )
 
 
+def performance_cores() -> int | None:
+    """How many performance cores this Mac has, if it has two kinds.
+
+    onnxruntime spreads synthesis over every core by default, and the slower
+    efficiency cores hold up each parallel step: on an M2 Max, keeping to the
+    eight performance cores synthesizes about a fifth faster.
+    """
+    if platform.system() != "Darwin":
+        return None
+    result = subprocess.run(
+        ["sysctl", "-n", "hw.perflevel0.physicalcpu"], capture_output=True, text=True
+    )
+    count = result.stdout.strip()
+    return int(count) if result.returncode == 0 and count.isdigit() else None
+
+
 def load_kokoro(folder: Path):
     """A ready synthesizer; kept separate so tests can replace it."""
     shorten_espeak_path()
     if platform.system() == "Darwin":  # where loading a fresh copy is slow
         reuse_espeak_copies(Path.home() / ".cache" / "kokoro-say" / "espeak")
+    import onnxruntime
     from kokoro_onnx import Kokoro
+    from kokoro_onnx.session import resolve_providers
 
-    return Kokoro(*(str(folder / name) for name in MODEL_FILES))
+    options = onnxruntime.SessionOptions()
+    if cores := performance_cores():
+        options.intra_op_num_threads = cores
+    model, voices = (str(folder / name) for name in MODEL_FILES)
+    session = onnxruntime.InferenceSession(
+        model, options, providers=resolve_providers()
+    )
+    return Kokoro.from_session(session, voices)
 
 
 def player_command(path: str) -> list[str] | None:

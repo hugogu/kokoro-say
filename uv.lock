@@ -215,7 +215,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kokoro-onnx", specifier = ">=0.6" },
+    { name = "kokoro-onnx", specifier = ">=0.6.1" },
     { name = "sounddevice", specifier = ">=0.5" },
     { name = "soundfile", specifier = ">=0.12" },
 ]
