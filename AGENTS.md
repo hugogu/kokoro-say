@@ -1,8 +1,13 @@
 # kokoro-say
 
-- `src/kokoro_say/cli.py` is the whole tool. Tests replace `ensure_model` and
-  `load_kokoro`, so only `test_speaks_with_the_real_model` needs the 350 MB
-  model, and it skips when the model is absent.
+- `src/kokoro_say/cli.py` is the whole tool. Tests replace `ensure_model`,
+  `load_kokoro` and `open_output`, so no test plays sound and only the
+  `real_model` tests need the 350 MB model; they skip when it is absent.
+- `--stream` gives SIGINT its default action while it plays. Python's
+  KeyboardInterrupt would wait for the batch onnxruntime is synthesizing on a
+  worker thread, which cannot be interrupted, and a process that exits with 130
+  instead of dying of SIGINT lets a calling shell loop carry on to its next
+  turn.
 - Before pushing, run `uv run ruff check`, `uv run ruff format --check` and
   `uv run pytest`. CI runs them on Linux, macOS and Windows, each with the oldest
   and newest supported Python.

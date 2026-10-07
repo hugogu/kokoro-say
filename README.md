@@ -9,6 +9,7 @@ no network once the model is cached.
 kokoro-say "Hello there."                          # speak it
 kokoro-say -v bf_emma "Good evening." -o hi.wav    # save it (.wav, .flac, .ogg)
 echo "Read from a pipe." | kokoro-say - -o out.flac
+kokoro-say --stream - < chapter.txt                # speak long text as it is generated
 kokoro-say -v '?'                                  # list the voices
 ```
 
@@ -28,7 +29,7 @@ accounts on the same machine.
 ## Usage
 
 ```text
-kokoro-say [text | -] [-o FILE] [-v VOICE] [-s SPEED] [-l LANG]
+kokoro-say [text | -] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
            [--list-voices] [--model-dir DIR]
 ```
 
@@ -36,6 +37,7 @@ kokoro-say [text | -] [-o FILE] [-v VOICE] [-s SPEED] [-l LANG]
 | --- | --- |
 | `text`, `-` | What to say; `-` reads standard input |
 | `-o FILE` | Save to `.wav`, `.flac` or `.ogg` instead of playing |
+| `--stream` | Start speaking before the whole text has been generated |
 | `-v VOICE` | Voice name (default `af_heart`); `-v '?'` lists them |
 | `-s SPEED` | Speaking rate from 0.5 to 2.0 (default 1.0) |
 | `-l LANG` | espeak language code; by default it follows the voice |
@@ -48,14 +50,18 @@ The English voices sound best; kokoro-onnx turns text into sounds with
 espeak-ng, which is weaker for Japanese and Chinese than Kokoro's own `misaki`.
 
 Playback uses `afplay` on macOS, `paplay`, `aplay` or `ffplay` on Linux, and
-`winsound` on Windows. Long text is fine; it is spoken once the whole passage
-has been generated.
+`winsound` on Windows, once the whole passage has been generated. `--stream`
+starts sooner on long text: kokoro-onnx generates speech in batches of up to
+about half a minute, and each batch plays while the next one is generated,
+joined without a gap as long as generation runs faster than speech. Text
+shorter than one batch gains nothing. Streaming plays through PortAudio, which
+the sounddevice wheels include on macOS and Windows; on Linux install it first,
+for example `sudo apt install libportaudio2`.
 
 ## Related tools
 
 - [nazdridoy/kokoro-tts](https://github.com/nazdridoy/kokoro-tts) is the fuller
-  tool for documents: EPUB and PDF chapters, streaming playback, voice blending
-  and MP3.
+  tool for documents: EPUB and PDF chapters, voice blending and MP3.
 - [hexgrad/kokoro](https://github.com/hexgrad/kokoro), the official package,
   runs on PyTorch and pronounces English best (`python -m kokoro`).
 

@@ -1,6 +1,8 @@
 import hashlib
 import io
+import signal
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +10,16 @@ import pytest
 import soundfile as sf
 
 from kokoro_say import cli
+
+STREAM_PARTS = [
+    np.linspace(-1, 1, 5_000, dtype=np.float32),
+    np.ones(300, dtype=np.float32),
+]
+
+needs_model = pytest.mark.skipif(
+    not (cli.model_dir() / "voices-v1.0.bin").exists(),
+    reason="needs the Kokoro model files locally",
+)
 
 
 class FakeKokoro:
@@ -21,6 +33,29 @@ class FakeKokoro:
         self.calls.append((text, voice, speed, lang))
         return np.zeros(24_000, dtype=np.float32), 24_000
 
+    async def create_stream(self, text, voice, speed, lang):
+        self.calls.append((text, voice, speed, lang))
+        for part in STREAM_PARTS:
+            yield part, 24_000
+
+
+class FakeOutput:
+    def __init__(self):
+        self.calls = []
+        self.written = []
+
+    def start(self):
+        self.calls.append("start")
+
+    def write(self, block):
+        self.written.append(block)
+
+    def stop(self):
+        self.calls.append("stop")
+
+    def close(self):
+        self.calls.append("close")
+
 
 @pytest.fixture
 def kokoro(monkeypatch, tmp_path):
@@ -28,6 +63,18 @@ def kokoro(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "ensure_model", lambda folder: folder)
     monkeypatch.setattr(cli, "load_kokoro", lambda folder: fake)
     monkeypatch.setenv("KOKORO_MODELS", str(tmp_path / "models"))
+    return fake
+
+
+@pytest.fixture
+def output(monkeypatch):
+    fake = FakeOutput()
+
+    def open_output(rate):
+        fake.rate = rate
+        return fake
+
+    monkeypatch.setattr(cli, "open_output", open_output)
     return fake
 
 
@@ -69,6 +116,30 @@ def test_plays_when_there_is_no_output_file(kokoro, monkeypatch):
     assert kokoro.calls[0][2] == 1.2
 
 
+def test_streams_the_parts_through_one_output(kokoro, output):
+    assert cli.main(["Hello", "--stream", "-v", "bf_emma"]) == 0
+    assert kokoro.calls == [("Hello", "bf_emma", 1.0, "en-gb")]
+    assert output.rate == 24_000
+    assert output.calls == ["start", "stop", "close"]
+    assert len(output.written) == len(STREAM_PARTS)
+    for written, part in zip(output.written, STREAM_PARTS, strict=True):
+        np.testing.assert_array_equal(written, part)
+
+
+def test_ctrl_c_ends_a_stream_at_once(kokoro, output, monkeypatch):
+    handlers = []
+
+    def write(samples):
+        handlers.append(signal.getsignal(signal.SIGINT))
+
+    monkeypatch.setattr(output, "write", write)
+    before = signal.getsignal(signal.SIGINT)
+    assert cli.main(["Hello", "--stream"]) == 0
+    # The default action ends the process; Python's would wait for synthesis.
+    assert set(handlers) == {signal.SIG_DFL}
+    assert signal.getsignal(signal.SIGINT) is before
+
+
 @pytest.mark.parametrize("argv", [["-v", "?"], ["--list-voices"]])
 def test_lists_voices(kokoro, capsys, argv):
     assert cli.main(argv) == 0
@@ -82,6 +153,7 @@ def test_lists_voices(kokoro, capsys, argv):
         [],  # no text
         ["Hello", "-s", "3"],  # speed out of range
         ["--voices", "bf_emma", "Hello"],  # not an option
+        ["Hello", "--stream", "-o", "hello.wav"],  # plays or saves, not both
     ],
 )
 def test_rejects_bad_arguments(kokoro, argv):
@@ -125,6 +197,33 @@ def test_finds_an_audio_player(monkeypatch):
     assert cli.player_command("a.wav") is None
 
 
+def test_explains_a_missing_portaudio(monkeypatch):
+    class NoPortAudio:
+        def find_spec(self, name, path=None, target=None):
+            if name == "sounddevice":
+                raise OSError("PortAudio library not found")
+
+    monkeypatch.delitem(sys.modules, "sounddevice", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [NoPortAudio(), *sys.meta_path])
+    with pytest.raises(RuntimeError, match="libportaudio2"):
+        cli.open_output(24_000)
+
+
+def test_explains_a_missing_audio_device(monkeypatch):
+    class PortAudioError(Exception):
+        pass
+
+    def no_device(**settings):
+        raise PortAudioError("Error querying device -1")
+
+    sounddevice = types.SimpleNamespace(
+        PortAudioError=PortAudioError, OutputStream=no_device
+    )
+    monkeypatch.setitem(sys.modules, "sounddevice", sounddevice)
+    with pytest.raises(RuntimeError, match="cannot open the audio output"):
+        cli.open_output(24_000)
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra rights")
 def test_shortens_a_long_espeak_data_path(monkeypatch, tmp_path):
     import espeakng_loader
@@ -151,11 +250,16 @@ def test_leaves_a_short_espeak_data_path_alone(monkeypatch):
     assert EspeakWrapper.__dict__["data_path"] is original
 
 
-@pytest.mark.skipif(
-    not (cli.model_dir() / "voices-v1.0.bin").exists(),
-    reason="needs the Kokoro model files locally",
-)
+@needs_model
 def test_speaks_with_the_real_model(tmp_path):
     out = tmp_path / "real.wav"
     assert cli.main(["Hello from Kokoro.", "-o", str(out)]) == 0
     assert 0.5 < sf.info(out).duration < 5
+
+
+@needs_model
+def test_streams_with_the_real_model(output):
+    assert cli.main(["Hello from Kokoro. This part is streamed.", "--stream"]) == 0
+    audio = np.concatenate(output.written)
+    assert audio.dtype == np.float32  # what the float32 output stream accepts
+    assert 1 < len(audio) / output.rate < 8
