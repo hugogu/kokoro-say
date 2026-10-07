@@ -1,0 +1,46 @@
+[project]
+name = "kokoro-say"
+dynamic = ["version"]
+description = "Speak or save text with the Kokoro-82M voices from the command line, like macOS say."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Hugo Gu" }]
+keywords = ["tts", "text-to-speech", "kokoro", "onnx", "cli", "say"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = ["kokoro-onnx>=0.6", "soundfile>=0.12"]
+
+[project.urls]
+Homepage = "https://github.com/hugogu/kokoro-say"
+Issues = "https://github.com/hugogu/kokoro-say/issues"
+
+[project.scripts]
+kokoro-say = "kokoro_say.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/kokoro_say/__init__.py"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
