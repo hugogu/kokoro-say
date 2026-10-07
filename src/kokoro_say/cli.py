@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import filecmp
 import hashlib
+import itertools
 import os
 import platform
 import shutil
@@ -12,6 +14,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import types
 import urllib.request
 from collections.abc import AsyncIterable, Sequence
 from pathlib import Path
@@ -130,9 +133,51 @@ def shorten_espeak_path() -> None:
     EspeakWrapper.data_path = property(lambda self: link)
 
 
+def reuse_espeak_copies(folder: Path) -> None:
+    """Keep phonemizer's copies of the espeak-ng library between runs.
+
+    phonemizer loads a private copy of the library for each espeak wrapper,
+    four on first use, each written into a fresh temporary folder. macOS
+    checks every newly written library before loading it, about half a second
+    apiece, but remembers the files it has checked, so copies kept in `folder`
+    pay that once instead of on every run.
+    """
+    from phonemizer.backend.espeak import api
+
+    # Leave phonemizer alone if it has changed, or is patched already
+    if getattr(api, "tempfile", None) is not tempfile:
+        return
+    if getattr(api, "shutil", None) is not shutil:
+        return
+    slots = itertools.count()
+
+    def mkdtemp() -> str:  # one folder per wrapper, since each needs its own copy
+        slot = folder / str(next(slots))
+        slot.mkdir(parents=True, exist_ok=True)
+        return str(slot)
+
+    def copy(source, target, follow_symlinks=True) -> None:
+        if os.path.exists(target) and filecmp.cmp(source, target, shallow=False):
+            return
+        partial = f"{target}.{os.getpid()}"
+        shutil.copyfile(source, partial)
+        os.replace(partial, target)  # never half written, even to another run
+
+    def rmtree(path, *args, **kwargs) -> None:
+        if not Path(path).is_relative_to(folder):
+            shutil.rmtree(path, *args, **kwargs)
+
+    api.tempfile = types.SimpleNamespace(**{**vars(tempfile), "mkdtemp": mkdtemp})
+    api.shutil = types.SimpleNamespace(
+        **{**vars(shutil), "copy": copy, "rmtree": rmtree}
+    )
+
+
 def load_kokoro(folder: Path):
     """A ready synthesizer; kept separate so tests can replace it."""
     shorten_espeak_path()
+    if platform.system() == "Darwin":  # where loading a fresh copy is slow
+        reuse_espeak_copies(Path.home() / ".cache" / "kokoro-say" / "espeak")
     from kokoro_onnx import Kokoro
 
     return Kokoro(*(str(folder / name) for name in MODEL_FILES))

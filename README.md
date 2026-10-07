@@ -24,7 +24,10 @@ or `pipx install git+https://github.com/hugogu/kokoro-say`. Python 3.11 or later
 The first run downloads the model, about 350 MB, into `~/.cache/kokoro-onnx`
 and checks its SHA-256; later runs work offline. Set `KOKORO_MODELS` or pass
 `--model-dir` to use another folder, for example one shared by several
-accounts on the same machine.
+accounts on the same machine. On macOS it also keeps copies of the espeak-ng
+library in `~/.cache/kokoro-say`, which saves about two seconds on every start:
+macOS checks each newly written library before loading it, and phonemizer
+would otherwise write four of them on every run.
 
 ## Usage
 

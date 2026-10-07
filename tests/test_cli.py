@@ -1,7 +1,9 @@
 import hashlib
 import io
+import shutil
 import signal
 import sys
+import tempfile
 import types
 from pathlib import Path
 
@@ -248,6 +250,32 @@ def test_leaves_a_short_espeak_data_path_alone(monkeypatch):
     monkeypatch.setattr(espeakng_loader, "get_data_path", lambda: "/short/path")
     cli.shorten_espeak_path()
     assert EspeakWrapper.__dict__["data_path"] is original
+
+
+def test_keeps_espeak_library_copies_between_runs(monkeypatch, tmp_path):
+    from phonemizer.backend.espeak import api
+
+    # Restored after the test, whatever reuse_espeak_copies() puts there.
+    monkeypatch.setattr(api, "tempfile", api.tempfile)
+    monkeypatch.setattr(api, "shutil", api.shutil)
+    library = tmp_path / "libespeak-ng.dylib"
+    library.write_bytes(b"espeak")
+
+    def run():
+        api.tempfile, api.shutil = tempfile, shutil  # each run starts unpatched
+        cli.reuse_espeak_copies(tmp_path / "cache")
+        folders = [api.tempfile.mkdtemp() for _ in range(2)]  # two wrappers
+        for folder in folders:
+            target = Path(folder) / library.name
+            api.shutil.copy(library, target, follow_symlinks=False)
+            api.shutil.rmtree(folder)  # as a wrapper does when it is done
+        return [(Path(folder) / library.name).stat().st_ino for folder in folders]
+
+    first = run()
+    assert len(set(first)) == 2  # each wrapper loads a copy of its own
+    assert run() == first  # the next run loads the very same files
+    library.write_bytes(b"espeak, upgraded")
+    assert run() != first  # while a changed library is copied afresh
 
 
 @needs_model
