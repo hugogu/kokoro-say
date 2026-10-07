@@ -5,7 +5,7 @@ description = "Speak or save text with the Kokoro-82M voices from the command li
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Hugo Gu" }]
 keywords = ["tts", "text-to-speech", "kokoro", "onnx", "cli", "say"]
 classifiers = [

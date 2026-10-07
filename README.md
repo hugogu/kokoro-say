@@ -18,7 +18,7 @@ kokoro-say -v '?'                                  # list the voices
 uv tool install git+https://github.com/hugogu/kokoro-say
 ```
 
-or `pipx install git+https://github.com/hugogu/kokoro-say`. Python 3.10 or later.
+or `pipx install git+https://github.com/hugogu/kokoro-say`. Python 3.11 or later.
 
 The first run downloads the model, about 350 MB, into `~/.cache/kokoro-onnx`
 and checks its SHA-256; later runs work offline. Set `KOKORO_MODELS` or pass
