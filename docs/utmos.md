@@ -125,7 +125,7 @@ restoration (LibriTTS-R). Fetch them with `benchmarks/fetch_human_reference.py`.
 | Recordings | predicted MOS | clips |
 | --- | ---: | ---: |
 | ksay | 4.47 ± 0.05 | 30 |
-| macOS `say`, default voice | 4.43 ± 0.08 | 30 |
+| macOS `say`, default voice | 4.43 ± 0.06 | 30 |
 | Human, studio speaker | 4.41 ± 0.06 | 12 |
 | Human, audiobook readers | 4.25 ± 0.09 | 12 |
 | macOS `say`, Samantha | 4.00 ± 0.18 | 30 |

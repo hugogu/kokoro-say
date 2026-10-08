@@ -14,7 +14,7 @@ restoration. The engines are the 30 sentences of the [main report](2026-10-08-ap
 | Recordings | predicted MOS (mean ± standard deviation) | clips |
 | --- | ---: | ---: |
 | ksay | 4.47 ± 0.05 | 30 |
-| macOS say, default voice | 4.43 ± 0.08 | 30 |
+| macOS say, default voice | 4.43 ± 0.06 | 30 |
 | Human, studio speaker (LJ Speech) | 4.41 ± 0.06 | 12 |
 | Human, audiobook readers (LibriTTS-R) | 4.25 ± 0.09 | 12 |
 | macOS say, Samantha | 4.00 ± 0.18 | 30 |

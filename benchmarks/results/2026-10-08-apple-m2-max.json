@@ -5,91 +5,91 @@
     "chip": "Apple M2 Max",
     "cores": 12,
     "memory_gb": 64,
-    "python": "3.14.3",
+    "python": "3.11.14",
     "onnxruntime": "1.30.0",
     "kokoro_onnx": "0.6.1",
-    "ksay_commit": "5c3a210",
+    "ksay_commit": "40d5d31",
     "whisper_model": "small.en"
   },
   "speed": {
     "ksay": {
       "short": {
-        "seconds": 1.5330219165189192,
+        "seconds": 1.0328297705273144,
         "audio_seconds": 1.7493333333333334,
-        "times_real": 1.141101320524888,
-        "peak_mb": 584.78125
+        "times_real": 1.6937286116764487,
+        "peak_mb": 558.046875
       },
       "medium": {
-        "seconds": 4.666918124945369,
+        "seconds": 3.929771958559286,
         "audio_seconds": 21.845333333333333,
-        "times_real": 4.680890632421167,
-        "peak_mb": 956.546875
+        "times_real": 5.558931552186596,
+        "peak_mb": 918.921875
       },
       "long": {
-        "seconds": 15.92798508296255,
+        "seconds": 14.604234667029232,
         "audio_seconds": 91.31,
-        "times_real": 5.732677392928387,
-        "peak_mb": 1024.015625
+        "times_real": 6.252296137512978,
+        "peak_mb": 1004.890625
       }
     },
     "say (default voice)": {
       "short": {
-        "seconds": 1.2858289789874107,
+        "seconds": 1.2764997705817223,
         "audio_seconds": 1.3694784580498867,
-        "times_real": 1.0650549026577,
-        "peak_mb": 36.421875
+        "times_real": 1.0728387811819131,
+        "peak_mb": 36.21875
       },
       "medium": {
-        "seconds": 3.7444103955640458,
+        "seconds": 3.694949541473761,
         "audio_seconds": 20.186938775510203,
-        "times_real": 5.391219616157835,
-        "peak_mb": 36.6875
+        "times_real": 5.463386860611492,
+        "peak_mb": 36.484375
       },
       "long": {
-        "seconds": 11.943782625021413,
+        "seconds": 11.784192666993476,
         "audio_seconds": 83.35492063492063,
-        "times_real": 6.978938184984859,
-        "peak_mb": 36.515625
+        "times_real": 7.073451953004017,
+        "peak_mb": 36.875
       }
     },
     "say (Samantha)": {
       "short": {
-        "seconds": 0.8336801665136591,
+        "seconds": 0.8139099584659562,
         "audio_seconds": 1.8031746031746032,
-        "times_real": 2.162909321347109,
-        "peak_mb": 36.21875
+        "times_real": 2.2154472794179796,
+        "peak_mb": 36.03125
       },
       "medium": {
-        "seconds": 0.9189157499931753,
+        "seconds": 0.939854395983275,
         "audio_seconds": 20.31419501133787,
-        "times_real": 22.10670021869659,
-        "peak_mb": 36.25
+        "times_real": 21.614193749751177,
+        "peak_mb": 36.125
       },
       "long": {
-        "seconds": 1.2333291670074686,
+        "seconds": 1.2625372909242287,
         "audio_seconds": 85.43455782312925,
-        "times_real": 69.27149710602109,
-        "peak_mb": 36.078125
+        "times_real": 67.66893812743359,
+        "peak_mb": 36.15625
       }
     },
     "eSpeak NG": {
       "short": {
-        "seconds": 0.36638116650283337,
+        "seconds": 0.1547211459837854,
         "audio_seconds": 1.6888888888888889,
-        "times_real": 4.609649849116434,
-        "peak_mb": 45.53125
+        "times_real": 10.915695318504703,
+        "peak_mb": 42.9375
       },
       "medium": {
-        "seconds": 0.3802231454756111,
+        "seconds": 0.1634418339235708,
         "audio_seconds": 21.200589569160996,
-        "times_real": 55.75828252812369,
-        "peak_mb": 50.390625
+        "times_real": 129.71336077319643,
+        "peak_mb": 47.421875
       },
       "long": {
-        "seconds": 0.42412524996325374,
+        "seconds": 0.21779370808508247,
         "audio_seconds": 85.54448979591837,
-        "times_real": 201.6962909030527,
-        "peak_mb": 67.6875
+        "times_real": 392.7775992614988,
+        "peak_mb": 65.46875
       }
     }
   },
