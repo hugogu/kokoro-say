@@ -128,6 +128,31 @@ def test_saves_every_documented_format(kokoro, tmp_path, suffix):
     assert sf.info(out).duration == pytest.approx(1.0, abs=0.1)
 
 
+@pytest.mark.parametrize("name", ["speech.m4a", "speech"])
+def test_refuses_a_file_name_that_names_no_audio_format(kokoro, tmp_path, capsys, name):
+    out = tmp_path / name
+    assert cli.main(["Hello there.", "-o", str(out)]) == 1
+    assert capsys.readouterr().err == (
+        f"ksay: cannot save {out}: end the name in .wav, .flac, .ogg or .mp3\n"
+    )
+    assert kokoro.calls == []  # it failed before the model was even used
+    assert not out.exists()
+
+
+def test_refuses_a_folder_that_does_not_exist(kokoro, tmp_path, capsys):
+    out = tmp_path / "nowhere" / "speech.wav"
+    assert cli.main(["Hello there.", "-o", str(out)]) == 1
+    err = capsys.readouterr().err
+    assert err == f"ksay: cannot save {out}: the folder {out.parent} does not exist\n"
+    assert kokoro.calls == []
+
+
+def test_saves_in_any_format_soundfile_writes(kokoro, tmp_path):
+    out = tmp_path / "speech.aiff"  # not one of the four documented, yet it works
+    assert cli.main(["Hello there.", "-o", str(out)]) == 0
+    assert sf.info(out).duration == pytest.approx(1.0, abs=0.1)
+
+
 def test_reads_text_from_stdin(kokoro, monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "stdin", io.StringIO("Piped in."))
     assert cli.main(["-", "-o", str(tmp_path / "piped.flac")]) == 0

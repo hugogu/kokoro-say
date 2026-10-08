@@ -368,6 +368,20 @@ def read_text(text: str | None, input_file: str | None) -> str:
         raise RuntimeError(f"{input_file} is not UTF-8 text") from error
 
 
+def check_output(target: Path) -> None:
+    """Raise a RuntimeError if speech cannot be saved there, before any is made."""
+    import soundfile as sf
+
+    if target.suffix[1:].upper() not in sf.available_formats():
+        raise RuntimeError(
+            f"cannot save {target}: end the name in .wav, .flac, .ogg or .mp3"
+        )
+    if not target.parent.is_dir():
+        raise RuntimeError(
+            f"cannot save {target}: the folder {target.parent} does not exist"
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ksay",
@@ -430,6 +444,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
 
     try:
+        if args.output:
+            check_output(Path(args.output))
         # Read before loading the model, so a missing file fails at once
         text = live = None
         if args.stream and not listing:
