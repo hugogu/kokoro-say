@@ -1,8 +1,9 @@
 # Benchmarks
 
-The comparison in the [main README](../README.md): `ksay` against macOS `say` and
-eSpeak NG, on speed, memory, intelligibility and predicted naturalness. Each number
-there comes from a script here and a report in [`results/`](results/).
+The comparison in the [main README](../README.md): `ksay` against macOS `say` (its
+default voice and Samantha) and eSpeak NG, on speed, memory, disk, intelligibility and
+predicted naturalness. Each number there comes from a report in [`results/`](results/),
+made by the scripts here (the disk sizes were added up by hand).
 
 ```sh
 uv run benchmarks/compare.py --wer --samples out/ --json results.json
@@ -21,7 +22,7 @@ downloads PyTorch and about 400 MB of UTMOS weights; both are cached afterwards.
 | --- | --- |
 | Time | Wall time of one command, from launch until its file is written, median of six runs (three for the long text) after a warm-up run. It includes start-up, because that is what a script pays. `ksay` is launched as `python -m kokoro_say`. |
 | Speed on the long text | Seconds of speech produced per second of wall time. |
-| Memory | Peak resident set size of the command's process, read with `wait4`. For `say` that is the `say` process; the speech services it calls in the background were each under 20 MB when sampled. |
+| Memory | Peak resident set size of the command's process, read with `wait4`. For `say` that is the `say` process only. The speech services it calls were each under 20 MB when sampled with Samantha; the default voice runs in a helper process that peaked near 170 MB and one core, which the table leaves out. |
 | Intelligibility | Each engine reads 30 sentences, Whisper transcribes the recordings, and the word error rate is computed after both texts pass through Whisper's English text normalizer. Lower is better. |
 | Predicted naturalness | UTMOS22, a neural model trained on listening-test scores, predicts the mean opinion score listeners would give (1 bad, 5 excellent). [`docs/utmos.md`](../docs/utmos.md) explains it. |
 
@@ -50,11 +51,13 @@ downloads PyTorch and about 400 MB of UTMOS weights; both are cached afterwards.
 - Predicted naturalness is a model of listeners, not listeners. It ranks engines that
   differ a lot but is not a verdict, and it cannot separate a very good voice from human
   speech: real recordings score 4.25 to 4.41 against `ksay`'s 4.47. Listen for yourself.
-- `say` was tested with Samantha, the voice plain `say` uses on the test Mac. The
-  Enhanced and Premium voices that macOS can download were not installed, and score
-  higher. Apple's licence does not allow publishing recordings of its voices, so this
-  repository holds no `say` audio; `--samples` writes it to your own disk for your
-  own listening.
+- `say` was tested twice: plain `say`, which speaks with the voice selected in the Mac's
+  settings (on the test Mac a modern voice rendered by a helper process, not Samantha),
+  and `say -v Samantha`, the classic compact voice. The default voice depends on the
+  Mac, so on yours that row may measure another one. The Enhanced and Premium voices
+  that macOS can download were not installed. Apple's licence does not allow publishing
+  recordings of its voices, so this repository holds no `say` audio; `--samples` writes
+  it to your own disk for your own listening.
 - Not tested: Windows' built-in voices, Piper and other neural engines, cloud services.
 
 ## Reading the naturalness score

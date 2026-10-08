@@ -8,68 +8,88 @@
     "python": "3.14.3",
     "onnxruntime": "1.30.0",
     "kokoro_onnx": "0.6.1",
-    "ksay_commit": "0b7769d",
+    "ksay_commit": "5c3a210",
     "whisper_model": "small.en"
   },
   "speed": {
     "ksay": {
       "short": {
-        "seconds": 1.7112966044805944,
+        "seconds": 1.5330219165189192,
         "audio_seconds": 1.7493333333333334,
-        "times_real": 1.0222268476155154,
-        "peak_mb": 586.5625
+        "times_real": 1.141101320524888,
+        "peak_mb": 584.78125
       },
       "medium": {
-        "seconds": 4.446938083565328,
+        "seconds": 4.666918124945369,
         "audio_seconds": 21.845333333333333,
-        "times_real": 4.912443781051896,
-        "peak_mb": 944.703125
+        "times_real": 4.680890632421167,
+        "peak_mb": 956.546875
       },
       "long": {
-        "seconds": 14.930220791953616,
+        "seconds": 15.92798508296255,
         "audio_seconds": 91.31,
-        "times_real": 6.115783635913137,
-        "peak_mb": 1030.5625
+        "times_real": 5.732677392928387,
+        "peak_mb": 1024.015625
       }
     },
-    "say": {
+    "say (default voice)": {
       "short": {
-        "seconds": 0.8048861040733755,
-        "audio_seconds": 1.8031746031746032,
-        "times_real": 2.2402854193271318,
-        "peak_mb": 35.75
+        "seconds": 1.2858289789874107,
+        "audio_seconds": 1.3694784580498867,
+        "times_real": 1.0650549026577,
+        "peak_mb": 36.421875
       },
       "medium": {
-        "seconds": 0.8997733749565668,
-        "audio_seconds": 20.31419501133787,
-        "times_real": 22.577012808718038,
-        "peak_mb": 36.125
+        "seconds": 3.7444103955640458,
+        "audio_seconds": 20.186938775510203,
+        "times_real": 5.391219616157835,
+        "peak_mb": 36.6875
       },
       "long": {
-        "seconds": 1.2262862079078332,
+        "seconds": 11.943782625021413,
+        "audio_seconds": 83.35492063492063,
+        "times_real": 6.978938184984859,
+        "peak_mb": 36.515625
+      }
+    },
+    "say (Samantha)": {
+      "short": {
+        "seconds": 0.8336801665136591,
+        "audio_seconds": 1.8031746031746032,
+        "times_real": 2.162909321347109,
+        "peak_mb": 36.21875
+      },
+      "medium": {
+        "seconds": 0.9189157499931753,
+        "audio_seconds": 20.31419501133787,
+        "times_real": 22.10670021869659,
+        "peak_mb": 36.25
+      },
+      "long": {
+        "seconds": 1.2333291670074686,
         "audio_seconds": 85.43455782312925,
-        "times_real": 69.66934576300027,
-        "peak_mb": 36.046875
+        "times_real": 69.27149710602109,
+        "peak_mb": 36.078125
       }
     },
     "eSpeak NG": {
       "short": {
-        "seconds": 0.3793105835211463,
+        "seconds": 0.36638116650283337,
         "audio_seconds": 1.6888888888888889,
-        "times_real": 4.452522450628469,
-        "peak_mb": 46.0
+        "times_real": 4.609649849116434,
+        "peak_mb": 45.53125
       },
       "medium": {
-        "seconds": 0.3970645625377074,
+        "seconds": 0.3802231454756111,
         "audio_seconds": 21.200589569160996,
-        "times_real": 53.39330569735161,
-        "peak_mb": 50.34375
+        "times_real": 55.75828252812369,
+        "peak_mb": 50.390625
       },
       "long": {
-        "seconds": 0.43837162503041327,
+        "seconds": 0.42412524996325374,
         "audio_seconds": 85.54448979591837,
-        "times_real": 195.141484784704,
-        "peak_mb": 68.359375
+        "times_real": 201.6962909030527,
+        "peak_mb": 67.6875
       }
     }
   },
@@ -93,7 +113,26 @@
         "mistakes": []
       }
     },
-    "say": {
+    "say (default voice)": {
+      "plain": {
+        "wer": 0.006211180124223602,
+        "perfect": 19,
+        "sentences": 20,
+        "mistakes": [
+          {
+            "said": "Smoky fires lack flame and heat.",
+            "heard": "Smokey fires lack flame and heat."
+          }
+        ]
+      },
+      "numbers": {
+        "wer": 0.0,
+        "perfect": 10,
+        "sentences": 10,
+        "mistakes": []
+      }
+    },
+    "say (Samantha)": {
       "plain": {
         "wer": 0.024844720496894408,
         "perfect": 16,
