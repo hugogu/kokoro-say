@@ -594,6 +594,11 @@ def test_counts_the_performance_cores(monkeypatch, system, code, out, cores):
     assert cli.performance_cores() == cores
 
 
+def test_the_tests_keep_onnxruntime_offline_too():
+    # a flaky abort of the whole run, at exit, is what it looks like when they do not
+    assert os.environ["ORT_DISABLE_TELEMETRY"] == "1"
+
+
 def test_onnxruntime_is_told_not_to_call_home_before_it_is_imported(monkeypatch):
     seen = []
 

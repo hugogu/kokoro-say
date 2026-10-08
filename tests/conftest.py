@@ -7,6 +7,17 @@ import pytest
 from kokoro_say import cli
 
 
+def pytest_configure(config):
+    """Keep onnxruntime from calling home in the test process as well.
+
+    Tests with a fake model still import kokoro_onnx, and with it onnxruntime, without
+    going through load_kokoro, which is what switches its telemetry off. Left alone,
+    that client connects to Microsoft a few seconds in, and can abort the process as it
+    exits, with exit status 134, after every test has passed.
+    """
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
+
+
 def pytest_collection_modifyitems(items):
     """Skip the tests marked needs_model when the model is not on this machine."""
     if (cli.model_dir() / "voices-v1.0.bin").exists():
