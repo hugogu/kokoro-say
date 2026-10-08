@@ -239,6 +239,12 @@ def performance_cores() -> int | None:
 
 def load_kokoro(folder: Path):
     """A ready synthesizer; kept separate so tests can replace it."""
+    # onnxruntime's macOS and Linux builds contact a Microsoft telemetry service a few
+    # seconds after they are imported, which a program that speaks offline should not
+    # do. A process that has done so for a while also aborts as it exits, in the C++
+    # code of that client. Only this variable stops it, and only if it is set before
+    # the import: onnxruntime.disable_telemetry_events() leaves the connection open.
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
     shorten_espeak_path()
     if platform.system() == "Darwin":  # where loading a fresh copy is slow
         reuse_espeak_copies(Path.home() / ".cache" / "kokoro-say" / "espeak")

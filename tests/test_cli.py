@@ -1,4 +1,6 @@
 import hashlib
+import importlib.abc
+import importlib.machinery
 import importlib.metadata
 import io
 import os
@@ -590,6 +592,35 @@ def test_counts_the_performance_cores(monkeypatch, system, code, out, cores):
     monkeypatch.setattr(cli.platform, "system", lambda: system)
     monkeypatch.setattr(cli.subprocess, "run", sysctl)
     assert cli.performance_cores() == cores
+
+
+def test_onnxruntime_is_told_not_to_call_home_before_it_is_imported(monkeypatch):
+    seen = []
+
+    class Importing(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        """Stands in for onnxruntime, and notes what the environment says on import."""
+
+        def find_spec(self, name, path, target=None):
+            if name == "onnxruntime":
+                return importlib.machinery.ModuleSpec(name, self)
+
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            seen.append(os.environ.get("ORT_DISABLE_TELEMETRY"))
+            raise ImportError("a stand-in that goes no further")
+
+    monkeypatch.setenv("ORT_DISABLE_TELEMETRY", "")  # so that it is unset again after
+    monkeypatch.delenv("ORT_DISABLE_TELEMETRY")
+    monkeypatch.delitem(sys.modules, "onnxruntime", raising=False)
+    monkeypatch.setattr(cli, "shorten_espeak_path", lambda: None)
+    monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(sys, "meta_path", [Importing(), *sys.meta_path])
+    with pytest.raises(ImportError, match="stand-in"):
+        cli.load_kokoro(Path("models"))
+    # it is not the Python function: that does not stop the connection
+    assert seen == ["1"]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra rights")

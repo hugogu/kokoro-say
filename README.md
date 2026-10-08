@@ -78,7 +78,9 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
   voices keep their tones and speak the English words of a Chinese sentence in the same
   voice, and JSON is read as a word, not spelled J, S, O, N ([how](#chinese)).
 - **Private and offline.** Nothing you read leaves your computer, and there is
-  nothing to sign up for.
+  nothing to sign up for. onnxruntime, the engine underneath, contacts a Microsoft
+  telemetry service on macOS and Linux unless told not to (version 1.30 was checked), so
+  `ksay` tells it not to.
 - **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
   answer of a language model or a growing log is heard from its first sentence, not
   after its last. `say` waits for the end of its input.

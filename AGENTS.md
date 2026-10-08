@@ -122,6 +122,17 @@
   rehearsed in a `python:3.11.14-slim-bookworm` container with the model folder mounted
   read-only and `KOKORO_MODELS` pointing at it: the CLI and the server then both play
   236,840 bytes of "Hello from CI." into the fake card.
+- onnxruntime 1.30 on macOS and Linux opens an HTTPS connection to a Microsoft telemetry
+  service (`mobile.events.data.microsoft.com`) about nine seconds after `import
+  onnxruntime`, with nothing loaded, and a process that lives on aborts as it exits:
+  `libc++abi: terminating due to uncaught exception ... recursive_mutex lock failed`, a
+  SIGABRT in the telemetry client's `HttpResponseDecoder` (macOS wrote a crash report).
+  A script that only imports onnxruntime and idles for 14 s reproduces both. Short runs
+  of the command rarely meet it; a server always does. `onnxruntime.disable_telemetry_events()`
+  does not stop the connection, which was the first thing tried. The environment variable
+  `ORT_DISABLE_TELEMETRY=1` does, if it is set before the import, so `load_kokoro` sets
+  it. Check a change like this with `lsof -nP -i -a -p PID` on a process that has idled
+  for 15 s, and always with a control that is known to connect. Windows was not checked.
 - `benchmarks/` and `scripts/` hold the PEP 723 scripts behind the README's comparison
   and audio: `compare.py` and `mos.py` measure, `make_audio.py` and
   `make_intro_video.py` build `docs/audio`. Every number in the README's comparison
