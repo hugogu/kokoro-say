@@ -27,7 +27,8 @@ jobs:
         with:
           path: ~/.cache/kokoro-onnx
           key: kokoro-onnx-model-v1.0
-      - run: uv sync
+      # The zh extra is skipped by itself on Python 3.13 and later
+      - run: uv sync --extra zh
       - run: uv run ruff check
       - run: uv run ruff format --check
       # Downloads the model when the cache is cold, through the installed command.
@@ -37,6 +38,13 @@ jobs:
         run: |
           uv run ksay "Hello from CI." -o "$RUNNER_TEMP/hello.wav"
           uv run python -c "import sys, soundfile as sf; d = sf.info(sys.argv[1]).duration; assert 0.5 < d < 5, d" "$RUNNER_TEMP/hello.wav"
+      # Chinese, with a mixed sentence; the text goes in a file so that no shell has to
+      # carry it, and is written with escapes so that no editor has to either
+      - name: Save Chinese text and read it back
+        run: |
+          uv run python -c "import sys; open(sys.argv[1], 'w', encoding='utf-8').write('\u4f60\u597d\uff0c\u4e16\u754c\u3002 Today\u2019s meeting is at noon.')" "$RUNNER_TEMP/zh.txt"
+          uv run ksay -v zf_xiaobei -f "$RUNNER_TEMP/zh.txt" -o "$RUNNER_TEMP/zh.wav"
+          uv run python -c "import sys, soundfile as sf; d = sf.info(sys.argv[1]).duration; assert 1.5 < d < 12, d" "$RUNNER_TEMP/zh.wav"
       # Runners have no speakers: playing must either work or fail with a message.
       - name: Play a sentence without a usable audio device
         run: |
