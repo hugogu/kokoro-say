@@ -87,9 +87,18 @@ def engines() -> list[Engine]:
         )
     ]
     if sys.platform == "darwin" and shutil.which("say"):
+        # Plain say speaks with the system voice, which can be a neural voice that
+        # `say -v '?'` does not list; naming Samantha asks for the classic compact one.
         found.append(
             Engine(
-                "say",
+                "say (default voice)",
+                ".aiff",
+                lambda text, out: ["say", "-o", str(out), text],
+            )
+        )
+        found.append(
+            Engine(
+                "say (Samantha)",
                 ".aiff",
                 lambda text, out: ["say", "-v", "Samantha", "-o", str(out), text],
             )
@@ -240,7 +249,9 @@ def intelligibility(engine: Engine, samples: Path | None) -> dict:
             paths = synthesize(engine, sentences, Path(folder), name)
             heard = transcribe(paths)
             if samples:
-                target = samples / engine.name.lower().replace(" ", "-")
+                target = samples / re.sub(
+                    r"[^a-z0-9]+", "-", engine.name.lower()
+                ).strip("-")
                 target.mkdir(parents=True, exist_ok=True)
                 for path in paths:
                     shutil.copy(path, target / path.name)
