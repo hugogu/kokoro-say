@@ -15,7 +15,7 @@ Offline, free, and as easy to use as `say`, which only macOS has.
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![macOS, Linux, Windows](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 
-[Hear it](#hear-it) · [Install](#install) · [Usage](#usage) · [Comparison](#how-it-compares) · [Platforms](#platforms) · [Troubleshooting](#troubleshooting)
+[Hear it](#hear-it) · [Install](#install) · [Usage](#usage) · [AI assistants](#use-it-from-an-ai-assistant) · [Comparison](#how-it-compares) · [Platforms](#platforms) · [Troubleshooting](#troubleshooting)
 
 </div>
 
@@ -82,6 +82,10 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
 - **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
   answer of a language model or a growing log is heard from its first sentence, not
   after its last. `say` waits for the end of its input.
+- **For AI assistants too.** `ksay --mcp` is a
+  [Model Context Protocol](https://modelcontextprotocol.io) server: Claude Code, Claude
+  Desktop, Cursor and others can speak to you through it, or save speech to a file
+  ([how](#use-it-from-an-ai-assistant)).
 - **Familiar.** `ksay "text"`, `-o file`, standard input, `-v voice`, `-s speed`.
 - **Quick to start talking.** About a second to speak a short sentence on an M2 Max, and
   `--stream` starts a long text, or one still being written, as soon as its first
@@ -100,7 +104,8 @@ uv tool install git+https://github.com/hugogu/kokoro-say
 or `pipx install git+https://github.com/hugogu/kokoro-say`. It needs Python 3.11 or
 later and installs the command `ksay`. To update, run the same command again with
 `uv tool install --force`; to remove it, `uv tool uninstall kokoro-say`. For Chinese,
-add the `zh` extra: see [Chinese](#chinese).
+add the `zh` extra: see [Chinese](#chinese). For AI assistants, add the `mcp` extra: see
+[Use it from an AI assistant](#use-it-from-an-ai-assistant).
 
 On Linux, playing sound needs PortAudio: `sudo apt install libportaudio2` on Debian
 and Ubuntu. Saving to a file does not.
@@ -122,7 +127,7 @@ ksay -v '?'                                  # list the voices
 
 ```text
 ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
-     [--list-voices] [--model-dir DIR]
+     [--list-voices] [--model-dir DIR] [--mcp]
 ```
 
 | Option | Meaning |
@@ -135,6 +140,7 @@ ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
 | `-s SPEED` | Speaking rate from 0.5 to 2.0 (default 1.0) |
 | `-l LANG` | espeak language code; by default it follows the voice |
 | `--model-dir DIR` | Model folder (default `$KOKORO_MODELS`, else `~/.cache/kokoro-onnx`) |
+| `--mcp` | Serve [MCP](#use-it-from-an-ai-assistant) on standard input and output, for an AI assistant, instead of speaking text; `-v`, `-s` and `--model-dir` then set the defaults of its calls |
 
 A voice's first letter is its language and the second is `f` or `m`:
 
@@ -193,6 +199,67 @@ says JSON as a word, where `say`'s Tingting voices change to a second voice for 
 read JSON as letters (a recognizer transcribes `say -v Tingting` as "j, s, o, n"). That
 is one listener, not a measurement; the [notes](benchmarks/results/2026-10-08-chinese-mixed.md)
 have the transcripts.
+
+## Use it from an AI assistant
+
+`ksay --mcp` runs `ksay` as a [Model Context Protocol](https://modelcontextprotocol.io)
+server, so that an assistant such as Claude Code, Claude Desktop or Cursor can speak to
+you, or save speech to a file. It is the same voices and the same model, started by the
+assistant instead of by you. It needs the `mcp` extra, which adds about 13 MB:
+
+```sh
+uv tool install --force 'kokoro-say[mcp] @ git+https://github.com/hugogu/kokoro-say'
+ksay --list-voices                           # fetches the model now, so the first call is not slow
+```
+
+Then tell the assistant how to start it. For Claude Code:
+
+```sh
+claude mcp add --scope user ksay -- ksay --mcp
+```
+
+For Claude Desktop, Cursor and others that read a list of `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "ksay": { "command": "ksay", "args": ["--mcp"] }
+  }
+}
+```
+
+An app that does not start from your shell may not find `ksay`: give it the full path
+that `which ksay` prints. `-v`, `-s` and `--model-dir` after `--mcp` set the voice, the
+speed and the model folder that a call gets when it names none of its own, for example
+`"args": ["--mcp", "-v", "bf_emma"]`. For Chinese, install `kokoro-say[mcp,zh]`.
+
+The server offers three tools:
+
+| Tool | What it does |
+| --- | --- |
+| `speak(text, voice, speed)` | Says the text through the speakers, and returns when the speech is over |
+| `save_speech(text, path, voice, speed, overwrite)` | Writes `.wav`, `.flac`, `.ogg` or `.mp3`; a file that exists is left alone unless `overwrite` is true |
+| `list_voices()` | Names the voices |
+
+Things to know:
+
+- **It speaks on the machine that runs it**, through that machine's default audio output,
+  so it suits an assistant on your own computer. It talks over standard input and output
+  only, which is how these assistants start a local server.
+- **Calls take turns.** There is one voice and one sound card, so a second `speak` waits
+  for the first. Cancelling a call stops the speech almost at once.
+- **`speak` returns when the speech is over**, which takes as long as reading the text
+  aloud. An assistant that gives tool calls a short time limit may give up on a long
+  speech, so spoken replies are best kept short.
+- **The model loads on the first call** and stays loaded, about a second once it is on
+  disk. If it was never downloaded, the first call downloads it, 354 MB, which is why the
+  command above fetches it first.
+- **PortAudio is restarted before each speech.** It lists the audio devices only when it
+  starts, and a server outlives a change of output; this is meant to let headphones
+  plugged in after the server started be heard.
+- **`save_speech` takes a full path**, as the server runs in whatever folder the assistant
+  chose; `~` is expanded. It never replaces a file unless the call sets `overwrite`, and
+  it is marked as destructive, for assistants that ask before running such a tool.
 
 ## How it compares
 
@@ -340,12 +407,29 @@ keeps eSpeak NG's library copies in `~/.cache/kokoro-say` (macOS checks every ne
 library once, which would cost about two seconds per run) and opens the audio device
 with a 512-frame buffer.
 
+`ksay --mcp` is the same machinery behind a different front door. A `speak` call goes
+through the pipeline of `--stream`, so the first sentence is heard while the rest is
+generated, and `save_speech` through the one of `-o`. What a server adds is what a
+command never needed: it loads the model once and keeps it, takes one call at a time,
+stops the speech when a call is cancelled, and restarts PortAudio before each speech,
+because PortAudio lists the audio devices only when it starts.
+
 ## Troubleshooting
 
 - **`playing speech needs PortAudio`** on Linux: install it, for example
   `sudo apt install libportaudio2`.
 - **`cannot open the audio output`** on a server or in a container: there is no sound
   card. Save to a file with `-o`.
+- **`--mcp needs the mcp extra`**: install it with
+  `uv tool install --force 'kokoro-say[mcp] @ git+https://github.com/hugogu/kokoro-say'`.
+  The rest of the message says which part is missing; an old `mcp` from before version 2
+  shows up here too.
+- **The assistant starts `ksay --mcp` but lists no tools**: run `ksay --mcp` in a
+  terminal. It should say that it is serving and wait; the assistant's MCP log shows what
+  the server writes to standard error. Apps that do not start from your shell may need
+  the full path of `ksay`.
+- **A `speak` call fails with `cannot open the audio output`**: the machine that runs the
+  server has no audio output, or none that it may use. Use `save_speech` instead.
 - **`Chinese tones need Kokoro's own front end`**: the `zh` extra is not installed, or
   Python is 3.13 or newer, which `misaki` does not support. See [Chinese](#chinese).
 - **Every run starts slowly**: the Python build matters. Importing `ksay`'s libraries took
@@ -364,7 +448,7 @@ with a 512-frame buffer.
 
 ```sh
 git clone https://github.com/hugogu/kokoro-say && cd kokoro-say
-uv sync
+uv sync --extra zh --extra mcp               # without the extras, their tests are skipped
 uv run pytest                                # tests that speak for real need the model
 uv run ruff check && uv run ruff format --check
 ```
