@@ -1,4 +1,5 @@
 import hashlib
+import importlib.metadata
 import io
 import shutil
 import signal
@@ -81,6 +82,16 @@ def output(monkeypatch):
     return fake
 
 
+def test_installs_the_command_as_ksay():
+    commands = {
+        entry.name: entry.value
+        for entry in importlib.metadata.entry_points(group="console_scripts")
+        if entry.dist.name == "kokoro-say"
+    }
+    assert commands == {"ksay": "kokoro_say.cli:main"}
+    assert cli.build_parser().prog == "ksay"
+
+
 def test_language_follows_the_voice_prefix():
     assert cli.language_for("af_heart") == "en-us"
     assert cli.language_for("bf_emma") == "en-gb"
@@ -126,7 +137,7 @@ def test_fails_before_synthesis_without_an_audio_device(kokoro, monkeypatch, cap
     monkeypatch.setattr(cli, "open_output", no_device)
     assert cli.main(["Hello"]) == 1
     assert kokoro.calls == []  # nothing synthesized for nobody to hear
-    assert "cannot open the audio output" in capsys.readouterr().err
+    assert capsys.readouterr().err.startswith("ksay: cannot open the audio output")
 
 
 def test_streams_the_parts_through_one_output(kokoro, output):

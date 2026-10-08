@@ -1,6 +1,7 @@
 # kokoro-say
 
-- `src/kokoro_say/cli.py` is the whole tool. Tests replace `ensure_model`,
+- `src/kokoro_say/cli.py` is the whole tool. The command is `ksay`; the package
+  and repository keep the name kokoro-say. Tests replace `ensure_model`,
   `load_kokoro` and `open_output`, so no test plays sound and only the
   `real_model` tests need the 350 MB model; they skip when it is absent.
 - On macOS the first phonemization, not the model, made start-up slow: phonemizer
@@ -16,7 +17,7 @@
   `/usr/bin/log show --start "<time>" --predicate 'process == "coreaudiod"' | grep
   Overload` (plain `log` is a zsh builtin). It printed 1–2 events per default
   playback and none with an explicit block size.
-- `speaker()` gives SIGINT its default action while kokoro-say generates and
+- `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with
   130 instead of dying of SIGINT lets a calling shell loop carry on to its next

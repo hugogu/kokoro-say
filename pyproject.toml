@@ -24,7 +24,7 @@ Homepage = "https://github.com/hugogu/kokoro-say"
 Issues = "https://github.com/hugogu/kokoro-say/issues"
 
 [project.scripts]
-kokoro-say = "kokoro_say.cli:main"
+ksay = "kokoro_say.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

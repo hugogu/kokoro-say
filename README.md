@@ -1,16 +1,17 @@
 # kokoro-say
 
 Speak or save text with the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
-voices from the command line, the way macOS `say` does. It runs locally through
+voices from the command line, the way macOS `say` does, as the command `ksay`.
+It runs locally through
 [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx): no API key, no GPU,
 no network once the model is cached.
 
 ```sh
-kokoro-say "Hello there."                          # speak it
-kokoro-say -v bf_emma "Good evening." -o hi.wav    # save it (.wav, .flac, .ogg)
-echo "Read from a pipe." | kokoro-say - -o out.flac
-kokoro-say --stream - < chapter.txt                # speak long text as it is generated
-kokoro-say -v '?'                                  # list the voices
+ksay "Hello there."                          # speak it
+ksay -v bf_emma "Good evening." -o hi.wav    # save it (.wav, .flac, .ogg)
+echo "Read from a pipe." | ksay - -o out.flac
+ksay --stream - < chapter.txt                # speak long text as it is generated
+ksay -v '?'                                  # list the voices
 ```
 
 ## Install
@@ -20,6 +21,7 @@ uv tool install git+https://github.com/hugogu/kokoro-say
 ```
 
 or `pipx install git+https://github.com/hugogu/kokoro-say`. Python 3.11 or later.
+The package is called kokoro-say; the command it installs is `ksay`.
 
 The first run downloads the model, about 350 MB, into `~/.cache/kokoro-onnx`
 and checks its SHA-256; later runs work offline. Set `KOKORO_MODELS` or pass
@@ -32,8 +34,8 @@ would otherwise write four of them on every run.
 ## Usage
 
 ```text
-kokoro-say [text | -] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
-           [--list-voices] [--model-dir DIR]
+ksay [text | -] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
+     [--list-voices] [--model-dir DIR]
 ```
 
 | Option | Meaning |

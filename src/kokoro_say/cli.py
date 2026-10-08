@@ -275,9 +275,9 @@ def stream(output, parts: AsyncIterable) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="kokoro-say",
+        prog="ksay",
         description="Speak or save text with the Kokoro-82M voices.",
-        epilog="Example: kokoro-say -v bf_emma 'Hello there.' -o hello.wav",
+        epilog="Example: ksay -v bf_emma 'Hello there.' -o hello.wav",
     )
     parser.add_argument("text", nargs="?", help="text to speak, or - to read stdin")
     destination = parser.add_mutually_exclusive_group()
@@ -327,9 +327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("\n".join(voices))
             return 0
         if args.voice not in voices:
-            parser.error(
-                f"unknown voice {args.voice!r}; list them with: kokoro-say -v '?'"
-            )
+            parser.error(f"unknown voice {args.voice!r}; list them with: ksay -v '?'")
         text = sys.stdin.read() if args.text == "-" else args.text
         if not text.strip():
             parser.error("there is no text to speak")
@@ -355,6 +353,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 output.write(samples)
     except (OSError, RuntimeError) as error:
-        print(f"kokoro-say: {error}", file=sys.stderr)
+        print(f"ksay: {error}", file=sys.stderr)
         return 1
     return 0
