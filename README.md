@@ -1,6 +1,11 @@
 <div align="center">
 
-# ksay
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/ksay-logo-dark.svg">
+    <img src="docs/logo/ksay-logo-light.svg" alt="ksay" height="88">
+  </picture>
+</h1>
 
 **Natural-sounding text-to-speech for your terminal.**<br>
 Offline, free, and as easy to use as `say`.
@@ -266,6 +271,10 @@ with `scripts/make_intro_video.py` and `scripts/make_compare_video.py`; the numb
   thewh1teagle, MIT.
 - [eSpeak NG](https://github.com/espeak-ng/espeak-ng), GPL-3.0, which kokoro-onnx
   installs as a dependency; it is not part of this repository.
+
+The logo is original; its wordmark is set in
+[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (SIL OFL 1.1), as outlines.
+The assets are in [`docs/logo`](docs/logo).
 
 The benchmarks use [Whisper](https://github.com/openai/whisper) and
 [UTMOS22 in SpeechMOS](https://github.com/tarepan/SpeechMOS), both MIT, and the Harvard
