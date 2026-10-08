@@ -10,12 +10,17 @@ A command speaks once and exits. A server answers one request after another for
 days, so it loads the model on the first request and keeps it, takes requests in
 turn, stops speaking when a request is cancelled, and asks PortAudio to look at the
 audio devices again before each speech.
+
+Over standard input and output the assistant starts the server, so both run on one
+machine. `--listen` serves HTTP instead, for an assistant on another machine that is to
+speak through the speakers of this one.
 """
 
 from __future__ import annotations
 
 import contextlib
 import functools
+import hmac
 import inspect
 import logging
 import signal
@@ -27,10 +32,13 @@ from typing import Annotated
 
 import anyio.to_thread
 import soundfile as sf
+import uvicorn
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
+from starlette.datastructures import Headers
+from starlette.responses import PlainTextResponse
 
 from kokoro_say import __version__, cli, streaming
 
@@ -213,8 +221,13 @@ def create_server(
     default_voice: str = cli.DEFAULT_VOICE,
     default_speed: float = 1.0,
     models: str | None = None,
+    save: bool = True,
 ) -> MCPServer:
-    """The MCP server; a call that names no voice or speed gets the defaults."""
+    """The MCP server; a call that names no voice or speed gets the defaults.
+
+    `save` offers save_speech, which writes where the caller says: right for an
+    assistant that this machine's user started, not for one across a network.
+    """
     engine = Engine(models)
     server = MCPServer(
         "ksay",
@@ -253,29 +266,107 @@ def create_server(
         """
         return await stoppable(engine.speak, text, voice, speed)
 
-    @tool(title="Save speech to a file", read_only_hint=False, destructive_hint=True)
-    async def save_speech(
-        text: Text,
-        path: Destination,
-        voice: Voice = default_voice,
-        speed: Speed = default_speed,
-        overwrite: Annotated[
-            bool, Field(description="Replace the file if it exists.")
-        ] = False,
-    ) -> str:
-        """Save text as speech in an audio file, instead of playing it.
+    if save:
 
-        The format follows the extension: .wav, .flac, .ogg or .mp3. A file that
-        exists is left alone unless overwrite is true.
-        """
-        return await stoppable(engine.save, text, path, voice, speed, overwrite)
+        @tool(
+            title="Save speech to a file", read_only_hint=False, destructive_hint=True
+        )
+        async def save_speech(
+            text: Text,
+            path: Destination,
+            voice: Voice = default_voice,
+            speed: Speed = default_speed,
+            overwrite: Annotated[
+                bool, Field(description="Replace the file if it exists.")
+            ] = False,
+        ) -> str:
+            """Save text as speech in an audio file, instead of playing it.
+
+            The format follows the extension: .wav, .flac, .ogg or .mp3. A file that
+            exists is left alone unless overwrite is true.
+            """
+            return await stoppable(engine.save, text, path, voice, speed, overwrite)
 
     @tool(title="List voices", read_only_hint=True, destructive_hint=False)
     async def list_voices() -> str:
-        """The names of all the voices, one of which `speak` and `save_speech` take."""
+        """The names of all the voices; any of them can be the voice of a speech."""
         return ", ".join(await run(engine.voices))
 
     return server
+
+
+class BearerToken:
+    """Let a request through only if it carries the token as a bearer token."""
+
+    def __init__(self, app, token: str):
+        self.app = app
+        self.token = token.encode()
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http":
+            scheme, _, given = (
+                Headers(scope=scope).get("authorization", "").partition(" ")
+            )
+            if scheme.lower() != "bearer" or not hmac.compare_digest(
+                given.encode(), self.token
+            ):
+                refusal = PlainTextResponse(
+                    "Unauthorized",
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+                await refusal(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+def http_app(
+    host: str,
+    token: str | None,
+    voice: str = cli.DEFAULT_VOICE,
+    speed: float = 1.0,
+    models: str | None = None,
+):
+    """The server as a web application, answering at /mcp.
+
+    It offers speak and list_voices, and no save_speech: whoever calls over a network
+    should not choose files to write on this machine.
+
+    Sessions are kept until the client ends them. The SDK drops one after 30 idle
+    minutes, and a client that does not start another when told so, as the protocol
+    asks, would find an assistant that speaks now and then deaf after every pause.
+    Bound to this machine, the SDK also checks the Host header, which keeps a web page
+    from reaching the server by DNS rebinding; beyond it the token is the protection.
+    """
+    server = create_server(voice, speed, models, save=False)
+    app = server.streamable_http_app(host=host, session_idle_timeout=None)
+    if token is not None:
+        app.add_middleware(BearerToken, token=token)
+    return app
+
+
+def serve_http(
+    host: str,
+    port: int,
+    token: str | None,
+    voice: str,
+    speed: float,
+    models: str | None,
+) -> None:
+    """Answer MCP over HTTP at /mcp until stopped."""
+    app = http_app(host, token, voice, speed, models)
+    shown = f"[{host}]" if ":" in host else host
+    guarded = "with a token" if token else "without a token"
+    print(f"ksay: serving MCP at http://{shown}:{port}/mcp, {guarded}", file=sys.stderr)
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_level="warning",
+        access_log=False,
+        ws="none",
+        timeout_graceful_shutdown=2,  # a speech in progress is cut off, not waited for
+    )
 
 
 def serve(voice: str, speed: float, models: str | None) -> None:

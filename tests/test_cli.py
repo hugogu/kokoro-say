@@ -164,6 +164,21 @@ def test_listing_voices_never_reads_stdin(kokoro, monkeypatch, capsys):
 
 
 @pytest.fixture
+def no_server(monkeypatch):
+    """A server module that fails the test if anything tries to start a server.
+
+    Without it, a check that went missing would start a real server in the test.
+    """
+
+    def refuse(*args):
+        raise AssertionError("a server was started")
+
+    module = types.SimpleNamespace(serve=refuse, serve_http=refuse)
+    monkeypatch.setitem(sys.modules, "kokoro_say.mcp_server", module)
+    monkeypatch.setattr(kokoro_say, "mcp_server", module, raising=False)
+
+
+@pytest.fixture
 def misaki(monkeypatch):
     """The Chinese front end, replaced by one that wraps its input."""
     monkeypatch.setattr(cli.chinese, "available", lambda: True)
@@ -360,11 +375,126 @@ def test_rejects_bad_arguments(kokoro, argv):
         ["--mcp", "-v", "?"],
     ],
 )
-def test_mcp_serves_requests_so_it_takes_nothing_to_speak(kokoro, argv):
+def test_mcp_serves_requests_so_it_takes_nothing_to_speak(kokoro, no_server, argv):
     with pytest.raises(SystemExit) as exit:
         cli.main(argv)
     assert exit.value.code == 2
     assert kokoro.calls == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("8765", ("127.0.0.1", 8765)),
+        (":8765", ("127.0.0.1", 8765)),
+        ("0.0.0.0:8765", ("0.0.0.0", 8765)),
+        ("192.168.1.10:80", ("192.168.1.10", 80)),
+        ("mac.local:8765", ("mac.local", 8765)),
+        ("[::1]:8765", ("::1", 8765)),
+        ("[::]:8765", ("::", 8765)),
+    ],
+)
+def test_parses_where_to_listen(value, expected):
+    assert cli.parse_listen(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "host", "host:", "8765x", "0", "65536", "-1", "a b:80", "[::1:80", "ho_st:80"],
+)
+def test_rejects_an_address_it_cannot_listen_on(value):
+    with pytest.raises(ValueError, match=r"\[HOST:\]PORT"):
+        cli.parse_listen(value)
+
+
+@pytest.mark.parametrize(
+    ("host", "loopback"),
+    [
+        ("127.0.0.1", True),
+        ("localhost", True),
+        ("::1", True),
+        ("0.0.0.0", False),
+        ("::", False),
+        ("192.168.1.10", False),
+        ("mac.local", False),
+    ],
+)
+def test_knows_which_hosts_are_only_this_machine(host, loopback):
+    assert cli.is_loopback(host) is loopback
+
+
+def test_the_token_comes_from_a_file_before_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "e" * 20)
+    token_file = tmp_path / "token"
+    token_file.write_text("f" * 20 + "\n", encoding="utf-8")  # an editor adds a newline
+    assert cli.read_token(str(token_file)) == "f" * 20
+    assert cli.read_token(None) == "e" * 20
+
+
+def test_there_is_no_token_unless_one_is_given(monkeypatch):
+    monkeypatch.delenv("KSAY_MCP_TOKEN", raising=False)
+    assert cli.read_token(None) is None
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "  ")
+    assert cli.read_token(None) is None  # a blank variable is not a token
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("short", "at least 16 characters"),
+        ("a token with spaces in it", "ASCII"),
+        ("é" * 20, "ASCII"),
+        ("\n", "is empty"),
+    ],
+)
+def test_refuses_a_token_it_cannot_trust(tmp_path, text, message):
+    token_file = tmp_path / "token"
+    token_file.write_text(text, encoding="utf-8")
+    with pytest.raises(RuntimeError, match=message):
+        cli.read_token(str(token_file))
+
+
+def test_refuses_a_token_in_the_environment_that_is_too_short(monkeypatch):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "short")
+    with pytest.raises(RuntimeError, match="at least 16 characters"):
+        cli.read_token(None)
+
+
+def test_refuses_a_token_file_it_cannot_read(tmp_path):
+    with pytest.raises(RuntimeError, match="cannot read .*missing"):
+        cli.read_token(str(tmp_path / "missing"))
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["--listen", "0.0.0.0:8765"], "needs a token"),
+        (["--listen", "mac.local:8765"], "needs a token"),
+        (["--listen", "[::]:8765"], "needs a token"),
+        (["--listen", "nonsense"], "is not [HOST:]PORT"),
+        (["--listen", "8765", "Hello"], "takes no text"),
+        (["--listen", "8765", "-o", "hello.wav"], "takes no text"),
+        (["--mcp", "--token-file", "token"], "goes with --listen"),
+    ],
+)
+def test_listen_refuses_what_is_unsafe_or_meaningless(
+    kokoro, no_server, monkeypatch, capsys, argv, message
+):
+    monkeypatch.delenv("KSAY_MCP_TOKEN", raising=False)
+    with pytest.raises(SystemExit) as exit:
+        cli.main(argv)
+    assert exit.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_a_token_that_is_too_weak_is_an_argument_error(
+    kokoro, no_server, monkeypatch, capsys
+):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "short")
+    with pytest.raises(SystemExit) as exit:
+        cli.main(["--listen", "0.0.0.0:8765"])
+    assert exit.value.code == 2
+    assert "at least 16 characters" in capsys.readouterr().err
 
 
 def test_mcp_without_its_extra_says_how_to_get_it(kokoro, monkeypatch, capsys):

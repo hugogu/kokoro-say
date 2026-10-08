@@ -6,9 +6,11 @@ import argparse
 import contextlib
 import filecmp
 import hashlib
+import ipaddress
 import itertools
 import os
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -77,6 +79,9 @@ MISSING_ZH = (
     "(kokoro-say[zh], Python 3.12 or older); speaking it with eSpeak NG, without tones"
 )
 MISSING_MCP = "ksay: --mcp needs the mcp extra (kokoro-say[mcp]): {}"
+TOKEN_VARIABLE = "KSAY_MCP_TOKEN"
+MIN_TOKEN = 16  # characters; `openssl rand -hex 24` makes 48
+HOSTNAME = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?")
 
 
 def to_kokoro(text: str, lang: str) -> tuple[str, bool]:
@@ -383,6 +388,61 @@ def check_output(target: Path) -> None:
         )
 
 
+def parse_listen(value: str) -> tuple[str, int]:
+    """The host and port of `--listen [HOST:]PORT`; the host defaults to loopback."""
+    host, colon, port = value.rpartition(":")
+    if not colon:
+        host, port = "", value
+    if host.startswith("[") and host.endswith("]"):  # an IPv6 address, as in a URL
+        host = host[1:-1]
+    host = host or "127.0.0.1"
+    try:
+        ipaddress.ip_address(host)
+        named = True
+    except ValueError:
+        named = HOSTNAME.fullmatch(host) is not None
+    if not (named and port.isdigit() and 0 < int(port) < 65536):
+        raise ValueError(f"{value!r} is not [HOST:]PORT, such as 8765 or 0.0.0.0:8765")
+    return host, int(port)
+
+
+def is_loopback(host: str) -> bool:
+    """Whether only this machine can reach a socket bound to `host`."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:  # a name other than localhost may be anywhere
+        return False
+
+
+def read_token(token_file: str | None) -> str | None:
+    """The token that requests must carry: from the file, else from $KSAY_MCP_TOKEN."""
+    if token_file is not None:
+        try:
+            token = Path(token_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as error:
+            raise RuntimeError(
+                f"cannot read {token_file}: {error.strerror or error}"
+            ) from error
+        except UnicodeDecodeError as error:
+            raise RuntimeError(f"{token_file} is not UTF-8 text") from error
+        if not token:
+            raise RuntimeError(f"{token_file} is empty")
+    else:
+        token = os.environ.get(TOKEN_VARIABLE, "").strip()
+        if not token:
+            return None
+    if len(token) < MIN_TOKEN:
+        raise RuntimeError(
+            f"the token needs at least {MIN_TOKEN} characters; "
+            "`openssl rand -hex 24` makes one"
+        )
+    if not (token.isascii() and token.isprintable() and " " not in token):
+        raise RuntimeError("the token is to be ASCII, without spaces")
+    return token
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ksay",
@@ -434,6 +494,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="serve MCP on standard input and output, for an AI assistant to speak "
         "through, instead of speaking text (needs the mcp extra)",
     )
+    parser.add_argument(
+        "--listen",
+        metavar="[HOST:]PORT",
+        help="serve MCP over HTTP at this address, for an assistant on another "
+        "machine, instead of standard input and output (default host: 127.0.0.1; "
+        "any other host needs a token)",
+    )
+    parser.add_argument(
+        "--token-file",
+        metavar="FILE",
+        help=f"with --listen: a file holding the token that requests must send as a "
+        f"bearer token (default: ${TOKEN_VARIABLE})",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     return parser
 
@@ -444,12 +517,29 @@ def serve_mcp(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     given = [args.text, args.input_file, args.output, args.lang]
     if any(value is not None for value in given) or args.stream or listing:
         parser.error("--mcp takes no text, -f, -o, --stream, -l or --list-voices")
+    if args.token_file is not None and args.listen is None:
+        parser.error("--token-file goes with --listen")
+    address = token = None
+    if args.listen is not None:
+        try:
+            address = parse_listen(args.listen)
+            token = read_token(args.token_file)
+        except (ValueError, RuntimeError) as error:
+            parser.error(str(error))
+        if token is None and not is_loopback(address[0]):
+            parser.error(
+                f"listening on {address[0]} reaches beyond this machine, so it needs "
+                f"a token: set ${TOKEN_VARIABLE} or give --token-file"
+            )
     try:
         from kokoro_say import mcp_server
     except ImportError as error:  # not installed, or too old; say which
         print(MISSING_MCP.format(error), file=sys.stderr)
         return 1
-    mcp_server.serve(args.voice, args.speed, args.model_dir)
+    if address is None:
+        mcp_server.serve(args.voice, args.speed, args.model_dir)
+    else:
+        mcp_server.serve_http(*address, token, args.voice, args.speed, args.model_dir)
     return 0
 
 
@@ -458,7 +548,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not MIN_SPEED <= args.speed <= MAX_SPEED:
         parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
-    if args.mcp:
+    if args.mcp or args.listen is not None:
         return serve_mcp(parser, args)
     listing = args.list_voices or args.voice == "?"
     if args.text is not None and args.input_file is not None:

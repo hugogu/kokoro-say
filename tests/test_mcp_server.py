@@ -1,3 +1,4 @@
+import contextlib
 import os
 import re
 import signal
@@ -13,7 +14,10 @@ import soundfile as sf
 pytest.importorskip("mcp")
 
 import anyio  # noqa: E402
+import httpx2  # noqa: E402
+import uvicorn  # noqa: E402
 from mcp import Client, StdioServerParameters  # noqa: E402
+from mcp.client.streamable_http import streamable_http_client  # noqa: E402
 
 from kokoro_say import cli, mcp_server  # noqa: E402
 
@@ -343,6 +347,197 @@ def test_phonemizer_warnings_stay_out_of_the_log(caplog):
     # as a backend does when it is made, which is after the server: then it warns
     get_logger().warning("words count mismatch on 100.0% of the lines (1/1)")
     assert caplog.records == []
+
+
+TOKEN = "t" * 32
+INITIALIZE_REQUEST = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {"name": "test", "version": "0"},
+    },
+}
+POST_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+}
+
+
+@contextlib.contextmanager
+def listening(token=None, **options):
+    """A real HTTP server on a free port of this machine; yields its address."""
+    web = uvicorn.Server(
+        uvicorn.Config(
+            mcp_server.http_app("127.0.0.1", token, **options),
+            host="127.0.0.1",
+            port=0,
+            log_level="error",
+            access_log=False,
+            ws="none",
+        )
+    )
+    thread = threading.Thread(target=web.run, daemon=True)
+    thread.start()
+    wait_until(lambda: web.started)
+    port = web.servers[0].sockets[0].getsockname()[1]
+    try:
+        yield f"http://127.0.0.1:{port}/mcp"
+    finally:
+        web.should_exit = True
+        thread.join(timeout=10)
+
+
+@pytest.fixture
+def url(kokoro, output, rescans):
+    with listening() as address:
+        yield address
+
+
+@pytest.fixture
+def guarded(kokoro, output, rescans):
+    with listening(token=TOKEN) as address:
+        yield address
+
+
+def over_http(url, tool, token=None, mode="auto", **arguments):
+    """One call to a tool over HTTP, as a client on another machine makes it."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    async def ask():
+        async with httpx2.AsyncClient(
+            headers=headers, timeout=httpx2.Timeout(30, read=300)
+        ) as web:
+            transport = streamable_http_client(url, http_client=web)
+            async with Client(transport, mode=mode) as client:
+                return await client.call_tool(tool, arguments)
+
+    return anyio.run(ask)
+
+
+def test_http_offers_what_is_safe_to_offer_a_remote_assistant(url):
+    async def tools():
+        async with Client(url) as client:
+            return (await client.list_tools()).tools
+
+    offered = anyio.run(tools)
+    assert {tool.name for tool in offered} == {"speak", "list_voices"}
+    # it cannot write files here, and nothing it says suggests that it can
+    assert not any("save_speech" in repr(tool) for tool in offered)
+
+
+def test_http_speaks_through_the_sound_card_of_the_machine_it_runs_on(
+    url, kokoro, output
+):
+    result = over_http(url, "speak", text="Hello over the network.")
+    assert not result.is_error
+    assert re.fullmatch(r"Spoke \d\.\d s of speech with af_heart\.", said(result))
+    assert [made[0] for made in kokoro.calls] == ["Hello over the network."]
+    assert output.calls == ["start", "stop", "close"]
+    assert said(over_http(url, "list_voices")) == "af_heart, bf_emma, zf_xiaobei"
+
+
+@pytest.mark.parametrize(
+    "authorization",
+    [
+        None,
+        "Bearer " + "x" * 32,  # a token, and not the one
+        "Bearer " + TOKEN[:-1],  # the right one, a character short
+        "Bearer",
+        "Basic " + TOKEN,
+        TOKEN,
+    ],
+)
+def test_http_refuses_a_request_without_the_token(guarded, authorization):
+    headers = dict(POST_HEADERS)
+    if authorization is not None:
+        headers["Authorization"] = authorization
+    reply = httpx2.post(guarded, json=INITIALIZE_REQUEST, headers=headers)
+    assert reply.status_code == 401
+    assert reply.headers["www-authenticate"] == "Bearer"
+
+
+def test_http_serves_a_request_that_carries_the_token(guarded, output):
+    assert said(over_http(guarded, "list_voices", token=TOKEN)).startswith("af_heart")
+    result = over_http(guarded, "speak", token=TOKEN, text="Hello with a token.")
+    assert not result.is_error
+    assert output.calls == ["start", "stop", "close"]
+    with pytest.raises(ExceptionGroup):  # a client with no token cannot connect
+        over_http(guarded, "list_voices")
+
+
+def test_http_on_this_machine_checks_the_host_header(url):
+    # a web page that reaches the port by pointing its own name at 127.0.0.1
+    headers = {**POST_HEADERS, "Host": "evil.example"}
+    reply = httpx2.post(url, json=INITIALIZE_REQUEST, headers=headers)
+    assert reply.status_code == 421
+
+
+@pytest.mark.parametrize("mode", ["legacy", "auto"])  # with and without sessions
+def test_http_cancelling_a_call_stops_the_speech(url, output, held, mode):
+    text = "This is a sentence that is long enough to be one of many. " * 20
+
+    async def scenario():
+        async with httpx2.AsyncClient(timeout=httpx2.Timeout(30, read=300)) as web:
+            transport = streamable_http_client(url, http_client=web)
+            async with Client(transport, mode=mode) as client:
+                async with anyio.create_task_group() as group:
+                    group.start_soon(client.call_tool, "speak", {"text": text})
+                    await anyio.to_thread.run_sync(held.writing.wait, 10)
+                    group.cancel_scope.cancel()
+
+    anyio.run(scenario)
+    held.release.set()
+    wait_until(lambda: output.calls == ["start", "close"])  # not played out: no stop
+    assert not over_http(url, "speak", text="Now say this instead.").is_error
+
+
+def test_http_sessions_are_not_dropped_for_idling(kokoro, monkeypatch):
+    seen = {}
+    streamable_http_app = mcp_server.MCPServer.streamable_http_app
+
+    def spy(self, **options):
+        seen.update(options)
+        return streamable_http_app(self, **options)
+
+    monkeypatch.setattr(mcp_server.MCPServer, "streamable_http_app", spy)
+    mcp_server.http_app("127.0.0.1", None)
+    assert seen["session_idle_timeout"] is None
+
+
+@pytest.mark.parametrize(
+    ("host", "token", "said"),
+    [
+        ("0.0.0.0", TOKEN, "http://0.0.0.0:9000/mcp, with a token"),
+        ("::1", None, "http://[::1]:9000/mcp, without a token"),
+    ],
+)
+def test_serving_over_http_says_where_it_listens(
+    kokoro, monkeypatch, capsys, host, token, said
+):
+    ran = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **options: ran.append(options))
+    mcp_server.serve_http(host, 9000, token, "af_heart", 1.0, None)
+    assert said in capsys.readouterr().err
+    assert (ran[0]["host"], ran[0]["port"]) == (host, 9000)
+    assert ran[0]["access_log"] is False  # every call is not a line of log
+
+
+def test_ksay_listen_serves_http_with_the_options_it_was_given(monkeypatch, tmp_path):
+    served = []
+    monkeypatch.setattr(mcp_server, "serve_http", lambda *args: served.append(args))
+    monkeypatch.delenv("KSAY_MCP_TOKEN", raising=False)
+    token_file = tmp_path / "token"
+    token_file.write_text(TOKEN + "\n", encoding="utf-8")
+    argv = ["--listen", "0.0.0.0:9000", "--token-file", str(token_file)]
+    argv += ["-v", "bf_emma", "-s", "1.2", "--model-dir", "/models"]
+    assert cli.main(argv) == 0
+    assert served == [("0.0.0.0", 9000, TOKEN, "bf_emma", 1.2, "/models")]
+    served.clear()
+    assert cli.main(["--mcp", "--listen", "9000"]) == 0  # this machine needs no token
+    assert served == [("127.0.0.1", 9000, None, "af_heart", 1.0, None)]
 
 
 def test_ksay_mcp_serves_with_the_options_it_was_given(monkeypatch):
