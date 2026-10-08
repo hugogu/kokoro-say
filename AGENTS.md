@@ -26,6 +26,18 @@
   is synthesizing, which cannot be interrupted, and a process that exits with
   130 instead of dying of SIGINT lets a calling shell loop carry on to its next
   turn.
+- `benchmarks/` and `scripts/` hold the PEP 723 scripts behind the README's comparison
+  and audio: `compare.py` and `mos.py` measure, `make_audio.py` and
+  `make_intro_video.py` build `docs/audio`. Every number in the README's comparison
+  must come from a report in `benchmarks/results`; rerun the benchmark and add a new
+  report rather than editing a figure by hand.
+- Never commit audio made with Apple's `say`. The macOS licence (section "Voices")
+  allows system voices for personal, non-commercial use and rules out recording,
+  publishing or redistributing them, even non-profit. Measuring `say` locally and
+  publishing the numbers is fine.
+- GitHub removes `<audio>` and `<video>` from a README, so a clip can only be linked,
+  or played inline as a video uploaded through GitHub's own editor. `docs/audio/intro.mp4`
+  is rendered for that upload and is not committed.
 - Before pushing, run `uv run ruff check`, `uv run ruff format --check` and
   `uv run pytest`. CI runs them on Linux, macOS and Windows, each with the oldest
   and newest supported Python.
