@@ -75,8 +75,8 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
   human recordings (4.3 to 4.4), ahead of the classic Samantha voice (4.0) and far ahead
   of eSpeak NG (2.2).
 - **Chinese, and Chinese mixed with English.** With the optional `zh` extra the Chinese
-  voices keep their tones and speak English words inside a Chinese sentence
-  ([how](#chinese)).
+  voices keep their tones and speak the English words of a Chinese sentence in the same
+  voice, and JSON is read as a word, not spelled J, S, O, N ([how](#chinese)).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
 - **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
@@ -186,8 +186,13 @@ ksay -v zf_xiaobei "今天我们来讨论一下 machine learning 的应用。"
 The extra adds about 100 MB, and about 0.9 seconds to the start-up of a Chinese run. It
 needs Python 3.12 or older, because that is all `misaki` supports. Without it `ksay` says
 so and falls back to eSpeak NG. Chinese text given to an English voice, which is the
-default, gets a hint to use a Chinese one. The result has been judged by ear, not
-measured against `say`'s Chinese voices.
+default, gets a hint to use a Chinese one.
+
+Judged by ear on three mixed sentences, `ksay` keeps one voice for the English words and
+says JSON as a word, where `say`'s Tingting voices change to a second voice for them and
+read JSON as letters (a recognizer transcribes `say -v Tingting` as "j, s, o, n"). That
+is one listener, not a measurement; the [notes](benchmarks/results/2026-10-08-chinese-mixed.md)
+have the transcripts.
 
 ## How it compares
 

@@ -52,9 +52,12 @@
   version is what the v1.0 voices were trained on (version '1.1' belongs to the separate
   v1.1-zh model); its phonemes go to `kokoro.create(..., is_phonemes=True)` with the tones
   as arrows. English segments go through `misaki.espeak.EspeakG2P`, spoken by the Chinese
-  voice, which a native listener preferred to an English voice for the English words; an
-  English recognizer, by contrast, caught only 0 or 1 of 4 test words that way against 4
-  of 4 with an English voice, so such a recognizer is the wrong judge of code-switching.
+  voice, which a native listener preferred to an English voice for the English words, and
+  to `say`'s Tingting voices, which switch to a second voice for them and read JSON as
+  letters (`benchmarks/transcripts.py` shows "j, s, o, n"). An English recognizer, by
+  contrast, caught only 0 or 1 of 4 test words that way against 4 of 4 with an English
+  voice, and put Tingting (Enhanced) above ksay on one sentence, so such a recognizer is
+  the wrong judge of code-switching: it can settle what was said, not how it sounds.
   Run any recognizer at temperature 0: with sampling the same file scored 4 of 4 once and
   0 of 4 the next time. `say`'s Chinese voices caught 0 to 3 of 4.
 - The extra is optional because misaki declares `Requires-Python <3.13` (0.9.4, from
