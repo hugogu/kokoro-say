@@ -49,6 +49,7 @@ def phonemize(text: str) -> str:
     """The text as Kokoro's phonemes. Needs misaki: check `available()` first."""
     chinese, english = front_ends()
     parts = []
+    text = text.replace("\u2019", "'")  # a curly apostrophe is part of "don't" too
     for latin, other in SEGMENT.findall(text):
         if latin:
             parts.append(english(latin.strip())[0])

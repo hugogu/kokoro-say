@@ -62,6 +62,11 @@ def test_phonemizes_english_words_inside_chinese_text():
 
 
 @needs_misaki
+def test_a_curly_apostrophe_stays_inside_its_english_word():
+    assert chinese.phonemize("今天 don\u2019t 来") == chinese.phonemize("今天 don't 来")
+
+
+@needs_misaki
 def test_leaves_nothing_for_blank_segments():
     assert chinese.phonemize("  \n ") == ""
     assert "  " not in chinese.phonemize("你好  machine   learning  世界")
