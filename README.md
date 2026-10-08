@@ -71,10 +71,11 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
   answer of a language model or a growing log is heard from its first sentence, not
   after its last. `say` waits for the end of its input.
 - **Familiar.** `ksay "text"`, `-o file`, standard input, `-v voice`, `-s speed`.
-- **Quick to start talking.** A second or two to the first word on an M2 Max, and
-  `--stream` begins speaking a long text before it has been generated.
+- **Quick to start talking.** About a second to speak a short sentence on an M2 Max, and
+  `--stream` starts a long text, or one still being written, as soon as its first
+  sentence is there.
 - **Fast enough.** About six times faster than real time on an M2 Max CPU: a 90-second
-  passage in about 16 seconds.
+  passage in about 15 seconds.
 - **Everywhere.** macOS (Apple silicon), Linux and Windows, tested in CI with the real
   model.
 
@@ -166,15 +167,17 @@ report, with every mistake, is in
 
 | | ksay | say (default voice) | say -v Samantha | eSpeak NG |
 | --- | ---: | ---: | ---: | ---: |
-| A six-word sentence, to a file | 1.5 s | 1.3 s | 0.8 s | 0.4 s |
-| 63 words, 22 seconds of speech | 4.7 s | 3.7 s | 0.9 s | 0.4 s |
-| 268 words, 91 seconds of speech | 15.9 s | 11.9 s | 1.2 s | 0.4 s |
-| Speed on the long text | 6× real time | 7× | 69× | 202× |
-| Peak memory | 0.6 to 1.0 GB | 37 MB, plus a helper | 36 MB | 46 to 68 MB |
+| A six-word sentence, to a file | 1.0 s | 1.3 s | 0.8 s | 0.2 s |
+| 63 words, 22 seconds of speech | 3.9 s | 3.7 s | 0.9 s | 0.2 s |
+| 268 words, 91 seconds of speech | 14.6 s | 11.8 s | 1.3 s | 0.2 s |
+| Speed on the long text | 6× real time | 7× | 68× | 393× |
+| Peak memory | 0.6 to 1.0 GB | 37 MB, plus a helper | 36 MB | 43 to 65 MB |
 | Disk | 0.5 GB | built into macOS | built into macOS | 20 MB |
 
-Times include starting the program. `ksay` needs a 354 MB model and 132 MB of packages.
-The helper process that renders the default voice peaked near 170 MB and one core; the
+Times include starting the program, with uv's Python 3.11, which is what `uv tool
+install` uses here; a slower Python build adds to every run (Homebrew's 3.14 imports
+`ksay`'s libraries 0.4 s slower). `ksay` needs a 354 MB model and 132 MB of packages. The
+helper process that renders the default voice peaked near 170 MB and one core; the
 memory row counts the `say` process only.
 
 ### Quality
@@ -193,12 +196,36 @@ which the model cannot tell apart from synthetic speech this good. It is not a
 listener, and with 30 sentences a gap of a point or two in word error rate is noise.
 [What the score means, and what it misses](docs/utmos.md).
 
-On a Mac, then, `ksay` and plain `say` come out level: the same predicted naturalness and
-the same word error rate on plain speech, with `say` somewhat quicker and far lighter.
-Samantha is the quickest of the three to speak, but it scores about 0.4 lower on predicted
-naturalness and had four of the twenty plain sentences transcribed inexactly, against
-one each for the other two. What `ksay` adds is not a better voice than the best one on
-a Mac; it is that quality on every other system as well, offline.
+On a Mac, then, `ksay` and plain `say` come out level on quality: the same predicted
+naturalness and the same word error rate on plain speech. `ksay` is quicker to say a
+single sentence (1.0 s against 1.3 s); `say` is about a fifth quicker on a long text
+(11.8 s against 14.6 s) and far lighter. Samantha is the quickest of the Mac voices,
+but it scores about 0.4 lower on predicted naturalness and had four of the twenty plain
+sentences transcribed inexactly, against one each for the other two. So `ksay` is not a
+better voice than the best one on a Mac. It is that quality on every other system as
+well, offline, and it can speak text while that is still being written, which `say`
+cannot.
+
+### Text that is still being written
+
+`say` reads all of its input before it speaks. `ksay --stream` speaks each sentence as it
+arrives. Ten sentences, about a minute of speech, written to a pipe one every two
+seconds, so that the text takes 18 seconds to write
+([report](benchmarks/results/2026-10-08-live-speech.md)):
+
+| | first sound | speech over |
+| --- | ---: | ---: |
+| ksay --stream | 1.4 s | 60 s |
+| say (default voice) | 18.5 s | 72 s |
+| say -v Samantha | 18.5 s | 72 s |
+| ksay, without --stream | 27.7 s | 87 s |
+
+`say` speaks 0.5 seconds after the last sentence has been written, however long that
+takes: a language model that answers for a minute leaves it silent for a minute.
+`ksay --stream` speaks 1.4 seconds after it starts, and does so as well when the text is
+already there. In that case `say` is 0.2 seconds ahead with its default voice, and
+because `ksay` speaks more slowly at its default speed (59 seconds for this text against
+53), its speech ends later.
 
 ### Hear the difference
 
@@ -227,14 +254,15 @@ say -v Samantha "The salt breeze came across from the sea."
 
 ### Which to use
 
-- **ksay** when the machine is not a Mac, when a script must sound the same on every
+- **ksay** when the machine is not a Mac, when text arrives over time and should be spoken
+  as it comes (a language model, a log), when a script must sound the same on every
   system, or when the audio will be published: Apple's licence does not allow
   recordings of its voices to be shared, and Kokoro's licence, Apache-2.0, sets no such
-  limit. On a Mac it costs a second or two of start-up and up to a gigabyte of memory.
-- **say** on a Mac, when the speech is only for you. It is already there, starts
-  quickest, uses little memory, and its default voice is as natural as `ksay`'s.
-  `say -v Samantha` answers in under a second, which suits spoken alerts such as "build
-  finished".
+  limit. On a Mac it costs up to a gigabyte of memory while it speaks.
+- **say** on a Mac, when the speech is only for you and the text is complete. It is
+  already there, uses little memory, is faster on long texts, and its default voice is as
+  natural as `ksay`'s. `say -v Samantha` answers in under a second, which suits spoken
+  alerts such as "build finished".
 - **eSpeak NG** when the footprint matters more than the voice: a small device, many
   languages, or text that must be spoken at once.
 
@@ -276,6 +304,10 @@ with a 512-frame buffer.
   `sudo apt install libportaudio2`.
 - **`cannot open the audio output`** on a server or in a container: there is no sound
   card. Save to a file with `-o`.
+- **Every run starts slowly**: the Python build matters. Importing `ksay`'s libraries took
+  0.3 s on uv's own Python 3.11 and 0.7 s on Homebrew's 3.14. Install with
+  `uv tool install --force --python 3.11 git+https://github.com/hugogu/kokoro-say` to use
+  the quick one.
 - **The first run after installing is slow**, several seconds longer: the model loads
   cold and macOS checks the new libraries once.
 - **A warning about PCI bus discovery** on some Linux virtual machines comes from

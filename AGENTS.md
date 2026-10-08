@@ -31,6 +31,20 @@
   a piece waits for more text and the one-second idle flush speaks what is left.
   kokoro-onnx adds its 0.25 s sentence pause only between its own batches, so each
   sentence is led by the pause the one before it called for, and nothing trails the last.
+- There is no cheap speed-up left in onnxruntime on this model, measured on an M2 Max
+  against 91 s of speech in 13.4 s (6.8x real time). Spreading the sentences over
+  threads tops out at about 7.5x and costs 1.2 to 1.5 GB. Dynamic int8 quantization,
+  made locally with `onnxruntime.quantization`, is 3.7x slower when it includes the
+  convolutions (they run as ConvInteger) and no faster when it covers only the matrix
+  products. The CoreML provider fails on the model's dynamic shapes with MLProgram,
+  and runs at about 5x real time with NeuralNetwork. About 1 core-second per second of
+  speech is what the decoder costs, so `say` is the cheaper way to speak on a Mac and
+  ksay should not claim otherwise.
+- Start-up depends on the Python build, which is easy to miss because it is spread over
+  every import. Importing ksay's libraries took 0.32 s on uv's Python 3.11, 0.41 s on
+  Homebrew's 3.12 and 0.70 s on Homebrew's 3.14 (`benchmarks/imports.py`), and a bare
+  interpreter 13, 21 and 54 ms. State the interpreter in every timing report and use the
+  one that `uv tool install` gives, uv's own: `uv run --python 3.11 benchmarks/...`.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with
