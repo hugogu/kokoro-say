@@ -19,6 +19,8 @@ from collections.abc import Callable, Iterable, Iterator
 MINIMUM = 15  # characters; shorter sentences ("Dr.", "Yes.") join the next one
 MAXIMUM = 300  # characters; text with no stop is cut at a space this far in
 IDLE = 1.0  # seconds of silence after which an unfinished sentence is spoken
+TICK = 0.1  # seconds between looks at whether a wait is still wanted
+SLICE = 2_400  # frames written at a time when speech can be stopped: 0.1 s at 24 kHz
 
 BOUNDARY = re.compile(
     r"""
@@ -34,6 +36,10 @@ ABBREVIATION = re.compile(
     r"\b(?:Mr|Mrs|Ms|Dr|Prof|St|Mt|Jr|Sr|vs|Gen|Col|Lt|Capt|Sgt|Rev|Hon|[A-Z]"
     r"|(?:[A-Za-z]\.)+[A-Za-z])$"
 )
+
+
+class Stopped(Exception):
+    """Speech was stopped before it was over."""
 
 
 def squeeze(text: str) -> str:
@@ -158,6 +164,7 @@ def speak(
     synthesize: Callable[[str], object | None],
     sentences: Iterable[str],
     ahead: int = 2,
+    stop: threading.Event | None = None,
 ) -> int:
     """Play the speech of each sentence while the next ones are synthesized.
 
@@ -165,24 +172,67 @@ def speak(
     nothing in it to say. Synthesis runs on its own thread, up to `ahead`
     sentences in front of playback, so sentences join without a gap whenever
     synthesis is quicker than speech. Returns how many sentences were spoken.
+
+    Setting `stop` from another thread ends the speech within about a tenth of a
+    second, even while a sentence is still being synthesized, and raises Stopped.
+    To make that possible the samples are written in slices of that length.
+
+    If playback ends early, by an error or a stop, the synthesis thread ends too,
+    after the sentence it is on: a thread left waiting for room would be one more
+    for every failure in a process that goes on speaking.
     """
     ready: queue.Queue = queue.Queue(maxsize=ahead)
+    over = threading.Event()  # set when nothing is listening to the producer any more
+
+    def put(item) -> None:
+        while not over.is_set():
+            try:
+                ready.put(item, timeout=TICK)
+                return
+            except queue.Full:
+                pass
 
     def produce() -> None:
         try:
             for sentence in sentences:
+                if over.is_set():
+                    return
                 if (samples := synthesize(sentence)) is not None:
-                    ready.put(samples)
+                    put(samples)
         except BaseException as error:  # reported by the thread that plays
-            ready.put(error)
+            put(error)
         else:
-            ready.put(None)
+            put(None)
 
     threading.Thread(target=produce, daemon=True).start()
     spoken = 0
-    while (item := ready.get()) is not None:
-        if isinstance(item, BaseException):
-            raise item
-        output.write(item)
-        spoken += 1
+    try:
+        while (item := _next(ready, stop)) is not None:
+            if isinstance(item, BaseException):
+                raise item
+            _play(output, item, stop)
+            spoken += 1
+    finally:
+        over.set()
     return spoken
+
+
+def _next(ready: queue.Queue, stop: threading.Event | None):
+    """The next item the producer made, or Stopped once `stop` is set."""
+    while True:
+        try:
+            return ready.get(timeout=TICK)
+        except queue.Empty:
+            if stop is not None and stop.is_set():
+                raise Stopped from None
+
+
+def _play(output, samples, stop: threading.Event | None) -> None:
+    """Write the samples, in slices that `stop` can end between when it is given."""
+    if stop is None:
+        output.write(samples)
+        return
+    for start in range(0, len(samples), SLICE):
+        if stop.is_set():
+            raise Stopped
+        output.write(samples[start : start + SLICE])

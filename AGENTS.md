@@ -4,8 +4,10 @@
   name kokoro-say. `streaming.py` holds what `--stream` needs: the sentence chunker, the
   stdin reader and the pipeline that plays one sentence while the next is generated.
   Tests replace `ensure_model`, `load_kokoro` and `open_output`, so no test plays sound
-  and only the tests marked `needs_model` need the 350 MB model; they skip when it is
-  absent.
+  and only the tests marked `needs_model` need the 350 MB model; `tests/conftest.py`
+  skips them when it is absent, and holds the fake model and sound card
+  (`kokoro`, `output`) that the CLI and MCP tests share. `mcp_server.py` is
+  `ksay --mcp`, the same pieces behind a Model Context Protocol server.
 - On macOS the first phonemization, not the model, made start-up slow: phonemizer
   loads four freshly written copies of the espeak-ng library, and macOS checks
   each new library file once, 0.45 to 0.8 s apiece. `reuse_espeak_copies` keeps
@@ -73,6 +75,87 @@
   is synthesizing, which cannot be interrupted, and a process that exits with
   130 instead of dying of SIGINT lets a calling shell loop carry on to its next
   turn.
+- `--mcp` is a flag, not a subcommand, because `ksay mcp` already speaks the word "mcp".
+  The SDK is the optional `mcp` extra (13 MB; importing `mcp.server` costs about 0.5 s
+  cold), which `cli.serve_mcp` imports only for `--mcp`: `ksay --version` still takes 0.04
+  s, and without the extra `--mcp` prints the ImportError's text after a hint, which also
+  covers an old 1.x SDK. mcp 2 renamed `FastMCP` to `MCPServer` and `mcp.server.fastmcp`
+  now raises on import, hence the `<3` cap. Its `stdio_server()` moves fd 1 to stderr while
+  serving, so a stray `print` or a C library cannot corrupt the protocol; log to stderr,
+  never stdout. The SDK also calls `logging.basicConfig` when `MCPServer()` is made, which
+  is why library warnings suddenly show up in a client's log.
+- The server's tools are `async` and run the blocking work on a worker thread with
+  `anyio.to_thread.run_sync(..., abandon_on_cancel=True)` and a `threading.Event`, set in a
+  `finally`, that the thread polls. A sync tool would be run on a thread the SDK cannot
+  abandon, so a cancelled request would wait out the whole speech. Speech stops because
+  `streaming.speak(stop=...)` writes in 0.1 s slices and polls for the stop while it
+  waits for the next sentence; onnxruntime cannot be interrupted, so the model has a lock
+  of its own, and the speech after a cancelled one waits for the sentence in flight (0.5 s
+  measured, with sentences of 100 characters). A cancelled `save_speech` keeps the model
+  for its whole-text synthesis, which took 38 s to end after the client left in the middle
+  of about five minutes of text: acceptable, since clients escalate to SIGTERM, but know it.
+- Lowering the level of phonemizer's logger does not silence it: `get_logger()` runs as
+  each backend is made, when the model loads, and sets the level back to WARNING. Switch
+  off `propagate` instead (the command is silent because the logger only has a
+  `NullHandler`). Only some text triggers "words count mismatch": "Hello from the MCP
+  server. It works." does and "Testing the ksay MCP server." does not, so a probe without
+  a run that is known to leak proves nothing. The first fix passed its test, which only
+  read the logger's level, and leaked in the real server.
+- PortAudio lists the audio devices once, in `Pa_Initialize`, and a server lives for days.
+  `mcp_server.rescan_devices()` calls sounddevice's private `_terminate()` and
+  `_initialize()` before each speech (4 ms, with no stream open, since speeches take
+  turns). Whether that makes a changed default output heard was not tested: doing so means
+  changing the Mac's audio settings, which an agent should not do. Check it by ear if it
+  matters.
+- Test a server through real sessions: `Client(server)` runs one in the process, with the
+  fakes, and `Client(StdioServerParameters(...))` runs `python -m kokoro_say --mcp` for
+  real. Make concurrency tests deterministic by letting the fake sound card's `write`
+  block on an event, and break the code on purpose to see each one fail: one test passed
+  while it exercised a path the fix never touched. To simulate a missing package, block
+  the submodule (`sys.modules["mcp.server"] = None`), as a blocked parent is ignored once
+  a child is imported. Another client is the real check: `claude -p "..." --mcp-config
+  cfg.json --strict-mcp-config --allowedTools mcp__ksay__speak ...` from an empty folder
+  connects, lists the tools and calls them, for about five cents. A warm connect takes
+  0.35 to 0.4 s and the first launch after an install about 3 s (uv's Python 3.11).
+  `scripts/mcp_speak.py` is that kind of client in twenty lines: CI plays through it, and
+  it is the quickest way to hear MCP playback on a machine. The Linux steps of CI can be
+  rehearsed in a `python:3.11.14-slim-bookworm` container with the model folder mounted
+  read-only and `KOKORO_MODELS` pointing at it: the CLI and the server then both play
+  236,840 bytes of "Hello from CI." into the fake card.
+- `--listen [HOST:]PORT` serves the same tools over Streamable HTTP (`mcp_server.http_app`,
+  `serve_http`, uvicorn) for an assistant on another machine; `docs/remote.md` is the
+  guide, written for OpenClaw. Decisions that are easy to undo by accident: loopback is
+  the default and anything else is refused without a token (`cli.serve_mcp`); the token is
+  a small ASGI middleware, because the SDK's own bearer auth is that of an OAuth resource
+  server and wants an issuer URL; `save_speech` is not offered, and the decision lives in
+  `http_app`, so that the tests and `serve_http` cannot disagree about it; sessions never
+  idle-expire, since the SDK's 30 minutes would make an assistant that speaks now and then
+  fail once after every pause. The SDK turns the Host check on only for the literal hosts
+  `127.0.0.1`, `localhost` and `::1`; elsewhere the token is all there is. The SDK has two
+  HTTP flavours, with sessions and without (there a cancel is a closed response), and
+  cancelling a speech works in both: `test_http_cancelling_a_call_stops_the_speech` runs
+  each. OpenClaw reads a `url` entry with no `transport` as SSE, which is not served.
+- Test HTTP with a real uvicorn thread on port 0 (`listening()` in the tests), and
+  `Client(streamable_http_client(url, http_client=httpx2.AsyncClient(headers=...)))`; a
+  client without the token raises an `ExceptionGroup` around `MCPError`. The real check of
+  the setup it is for is a client in a `python:3.11.14-slim-bookworm` container, reaching
+  the Mac through `host.docker.internal`, and Claude Code with `"type": "http"` and
+  `headers`. Never let a test that must refuse something be able to start a server: a
+  mutation of the token check started one on all interfaces with no token, the test hung,
+  and the orphan outlived its timeout; the stand-in `no_server` fixture and process groups
+  in the mutation script came out of that. `env -i HOME=... ksay ...` shows what a launchd
+  job, cron or a client without a PATH meets: `sysctl` was not found there.
+- onnxruntime 1.30 on macOS and Linux opens an HTTPS connection to a Microsoft telemetry
+  service (`mobile.events.data.microsoft.com`) about nine seconds after `import
+  onnxruntime`, with nothing loaded, and a process that lives on aborts as it exits:
+  `libc++abi: terminating due to uncaught exception ... recursive_mutex lock failed`, a
+  SIGABRT in the telemetry client's `HttpResponseDecoder` (macOS wrote a crash report).
+  A script that only imports onnxruntime and idles for 14 s reproduces both. Short runs
+  of the command rarely meet it; a server always does. `onnxruntime.disable_telemetry_events()`
+  does not stop the connection, which was the first thing tried. The environment variable
+  `ORT_DISABLE_TELEMETRY=1` does, if it is set before the import, so `load_kokoro` sets
+  it. Check a change like this with `lsof -nP -i -a -p PID` on a process that has idled
+  for 15 s, and always with a control that is known to connect. Windows was not checked.
 - `benchmarks/` and `scripts/` hold the PEP 723 scripts behind the README's comparison
   and audio: `compare.py` and `mos.py` measure, `make_audio.py` and
   `make_intro_video.py` build `docs/audio`. Every number in the README's comparison

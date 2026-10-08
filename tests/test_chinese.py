@@ -8,10 +8,6 @@ from kokoro_say import chinese, cli
 needs_misaki = pytest.mark.skipif(
     not chinese.available(), reason="needs the zh extra (misaki, Python before 3.13)"
 )
-needs_model = pytest.mark.skipif(
-    not (cli.model_dir() / "voices-v1.0.bin").exists(),
-    reason="needs the Kokoro model files locally",
-)
 TONES = "→↗↓↘"
 
 
@@ -73,7 +69,7 @@ def test_leaves_nothing_for_blank_segments():
 
 
 @needs_misaki
-@needs_model
+@pytest.mark.needs_model
 def test_speaks_chinese_and_mixed_text_with_the_real_model(tmp_path):
     plain = tmp_path / "plain.wav"
     mixed = tmp_path / "mixed.wav"

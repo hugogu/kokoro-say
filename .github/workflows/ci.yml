@@ -28,7 +28,7 @@ jobs:
           path: ~/.cache/kokoro-onnx
           key: kokoro-onnx-model-v1.0
       # The zh extra is skipped by itself on Python 3.13 and later
-      - run: uv sync --extra zh
+      - run: uv sync --extra zh --extra mcp
       - run: uv run ruff check
       - run: uv run ruff format --check
       # Downloads the model when the cache is cold, through the installed command.
@@ -57,6 +57,18 @@ jobs:
             test "$status" -le 1
             if grep -q Traceback <<<"$output"; then exit 1; fi
           done
+      # The same through the MCP server, as an assistant's tool call: it speaks, or
+      # says that it cannot play, and never answers with a crash.
+      - name: Speak through the MCP server without a usable audio device
+        run: |
+          set +e
+          output=$(uv run python scripts/mcp_speak.py "Hello from CI." 2>&1)
+          status=$?
+          set -e
+          echo "mcp_speak -> exit $status: $output"
+          test "$status" -le 1
+          if grep -q Traceback <<<"$output"; then exit 1; fi
+          if test "$status" -eq 1; then grep -qE "audio output|PortAudio" <<<"$output"; fi
       # An ALSA default device that writes what it is given to a file stands in
       # for a sound card, so PortAudio's playback is tested for real.
       - name: Play through a fake sound card
@@ -83,3 +95,12 @@ jobs:
             echo "ksay $flags played $bytes bytes"
             test "$bytes" -gt 150000 -a "$bytes" -lt 400000  # about 1.2 s at 192 kB/s
           done
+      # And the MCP server's speak, which writes in slices that a stop can end between
+      - name: Speak through the MCP server into the fake sound card
+        if: runner.os == 'Linux'
+        run: |
+          rm -f "$RUNNER_TEMP/played.raw"
+          uv run python scripts/mcp_speak.py "Hello from CI."
+          bytes=$(stat -c %s "$RUNNER_TEMP/played.raw")
+          echo "the MCP server played $bytes bytes"
+          test "$bytes" -gt 150000 -a "$bytes" -lt 400000

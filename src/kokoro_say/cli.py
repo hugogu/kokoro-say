@@ -6,9 +6,11 @@ import argparse
 import contextlib
 import filecmp
 import hashlib
+import ipaddress
 import itertools
 import os
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -24,6 +26,8 @@ from kokoro_say import __version__, chinese
 from kokoro_say.streaming import TextStream, speak, stdin_pieces
 
 DEFAULT_VOICE = "af_heart"
+MIN_SPEED = 0.5
+MAX_SPEED = 2.0
 SAMPLE_RATE = 24_000  # the only rate Kokoro-82M speaks at
 SENTENCE_PAUSE = 0.25  # seconds of silence kokoro-onnx leaves between its own batches
 CLAUSE_PAUSE = 0.1
@@ -74,6 +78,10 @@ MISSING_ZH = (
     "ksay: Chinese tones need Kokoro's own front end, the zh extra "
     "(kokoro-say[zh], Python 3.12 or older); speaking it with eSpeak NG, without tones"
 )
+MISSING_MCP = "ksay: --mcp needs the mcp extra (kokoro-say[mcp]): {}"
+TOKEN_VARIABLE = "KSAY_MCP_TOKEN"
+MIN_TOKEN = 16  # characters; `openssl rand -hex 24` makes 48
+HOSTNAME = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?")
 
 
 def to_kokoro(text: str, lang: str) -> tuple[str, bool]:
@@ -222,15 +230,26 @@ def performance_cores() -> int | None:
     """
     if platform.system() != "Darwin":
         return None
-    result = subprocess.run(
-        ["sysctl", "-n", "hw.perflevel0.physicalcpu"], capture_output=True, text=True
-    )
+    try:  # by its whole name: a PATH without /usr/sbin, or none, does not find it
+        result = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "hw.perflevel0.physicalcpu"],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # this only chooses the cores, so it is no reason to fail
+        return None
     count = result.stdout.strip()
     return int(count) if result.returncode == 0 and count.isdigit() else None
 
 
 def load_kokoro(folder: Path):
     """A ready synthesizer; kept separate so tests can replace it."""
+    # onnxruntime's macOS and Linux builds contact a Microsoft telemetry service a few
+    # seconds after they are imported, which a program that speaks offline should not
+    # do. A process that has done so for a while also aborts as it exits, in the C++
+    # code of that client. Only this variable stops it, and only if it is set before
+    # the import: onnxruntime.disable_telemetry_events() leaves the connection open.
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
     shorten_espeak_path()
     if platform.system() == "Darwin":  # where loading a fresh copy is slow
         reuse_espeak_copies(Path.home() / ".cache" / "kokoro-say" / "espeak")
@@ -278,6 +297,18 @@ def open_output(rate: int):
 
 
 @contextlib.contextmanager
+def device():
+    """The default audio device, started, and released however the block ends."""
+    output = open_output(SAMPLE_RATE)
+    try:
+        output.start()
+        yield output
+        output.stop()  # returns once the buffered audio has played
+    finally:
+        output.close()  # discards whatever an error left unplayed
+
+
+@contextlib.contextmanager
 def speaker():
     """The default audio device, opened before any speech is generated.
 
@@ -285,16 +316,14 @@ def speaker():
     straight to it instead of through a file and a player process. Python
     would turn Ctrl-C into an exception and then wait for the batch still
     being synthesized, so Ctrl-C keeps its default action and ends the process.
+    That is a setting of the main thread, which is why `device` is apart.
     """
-    output = open_output(SAMPLE_RATE)
     interrupt = signal.signal(signal.SIGINT, signal.SIG_DFL)
     try:
-        output.start()
-        yield output
-        output.stop()  # returns once the buffered audio has played
+        with device() as output:
+            yield output
     finally:
         signal.signal(signal.SIGINT, interrupt)
-        output.close()  # discards whatever an error left unplayed
 
 
 def synthesizer(kokoro, voice: str, speed: float, lang: str):
@@ -356,6 +385,75 @@ def read_text(text: str | None, input_file: str | None) -> str:
         raise RuntimeError(f"{input_file} is not UTF-8 text") from error
 
 
+def check_output(target: Path) -> None:
+    """Raise a RuntimeError if speech cannot be saved there, before any is made."""
+    import soundfile as sf
+
+    if target.suffix[1:].upper() not in sf.available_formats():
+        raise RuntimeError(
+            f"cannot save {target}: end the name in .wav, .flac, .ogg or .mp3"
+        )
+    if not target.parent.is_dir():
+        raise RuntimeError(
+            f"cannot save {target}: the folder {target.parent} does not exist"
+        )
+
+
+def parse_listen(value: str) -> tuple[str, int]:
+    """The host and port of `--listen [HOST:]PORT`; the host defaults to loopback."""
+    host, colon, port = value.rpartition(":")
+    if not colon:
+        host, port = "", value
+    if host.startswith("[") and host.endswith("]"):  # an IPv6 address, as in a URL
+        host = host[1:-1]
+    host = host or "127.0.0.1"
+    try:
+        ipaddress.ip_address(host)
+        named = True
+    except ValueError:
+        named = HOSTNAME.fullmatch(host) is not None
+    if not (named and port.isdigit() and 0 < int(port) < 65536):
+        raise ValueError(f"{value!r} is not [HOST:]PORT, such as 8765 or 0.0.0.0:8765")
+    return host, int(port)
+
+
+def is_loopback(host: str) -> bool:
+    """Whether only this machine can reach a socket bound to `host`."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:  # a name other than localhost may be anywhere
+        return False
+
+
+def read_token(token_file: str | None) -> str | None:
+    """The token that requests must carry: from the file, else from $KSAY_MCP_TOKEN."""
+    if token_file is not None:
+        try:
+            token = Path(token_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as error:
+            raise RuntimeError(
+                f"cannot read {token_file}: {error.strerror or error}"
+            ) from error
+        except UnicodeDecodeError as error:
+            raise RuntimeError(f"{token_file} is not UTF-8 text") from error
+        if not token:
+            raise RuntimeError(f"{token_file} is empty")
+    else:
+        token = os.environ.get(TOKEN_VARIABLE, "").strip()
+        if not token:
+            return None
+    if len(token) < MIN_TOKEN:
+        raise RuntimeError(
+            f"the token needs at least {MIN_TOKEN} characters; "
+            "`openssl rand -hex 24` makes one"
+        )
+    if not (token.isascii() and token.isprintable() and " " not in token):
+        raise RuntimeError("the token is to be ASCII, without spaces")
+    return token
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ksay",
@@ -401,23 +499,78 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-dir",
         help="model folder (default: $KOKORO_MODELS, else ~/.cache/kokoro-onnx)",
     )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="serve MCP on standard input and output, for an AI assistant to speak "
+        "through, instead of speaking text (needs the mcp extra)",
+    )
+    parser.add_argument(
+        "--listen",
+        metavar="[HOST:]PORT",
+        help="serve MCP over HTTP at this address, for an assistant on another "
+        "machine, instead of standard input and output (default host: 127.0.0.1; "
+        "any other host needs a token)",
+    )
+    parser.add_argument(
+        "--token-file",
+        metavar="FILE",
+        help=f"with --listen: a file holding the token that requests must send as a "
+        f"bearer token (default: ${TOKEN_VARIABLE})",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     return parser
+
+
+def serve_mcp(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """`ksay --mcp`: answer MCP requests instead of speaking text."""
+    listing = args.list_voices or args.voice == "?"
+    given = [args.text, args.input_file, args.output, args.lang]
+    if any(value is not None for value in given) or args.stream or listing:
+        parser.error("--mcp takes no text, -f, -o, --stream, -l or --list-voices")
+    if args.token_file is not None and args.listen is None:
+        parser.error("--token-file goes with --listen")
+    address = token = None
+    if args.listen is not None:
+        try:
+            address = parse_listen(args.listen)
+            token = read_token(args.token_file)
+        except (ValueError, RuntimeError) as error:
+            parser.error(str(error))
+        if token is None and not is_loopback(address[0]):
+            parser.error(
+                f"listening on {address[0]} reaches beyond this machine, so it needs "
+                f"a token: set ${TOKEN_VARIABLE} or give --token-file"
+            )
+    try:
+        from kokoro_say import mcp_server
+    except ImportError as error:  # not installed, or too old; say which
+        print(MISSING_MCP.format(error), file=sys.stderr)
+        return 1
+    if address is None:
+        mcp_server.serve(args.voice, args.speed, args.model_dir)
+    else:
+        mcp_server.serve_http(*address, token, args.voice, args.speed, args.model_dir)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not MIN_SPEED <= args.speed <= MAX_SPEED:
+        parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
+    if args.mcp or args.listen is not None:
+        return serve_mcp(parser, args)
     listing = args.list_voices or args.voice == "?"
     if args.text is not None and args.input_file is not None:
         parser.error("give the text or -f FILE, not both")
     if not listing and args.text is None and args.input_file is None:
         if stdin_is_terminal():
             parser.error("give the text to speak, or -f FILE, or pipe it in")
-    if not 0.5 <= args.speed <= 2.0:
-        parser.error("speed must be between 0.5 and 2.0")
 
     try:
+        if args.output:
+            check_output(Path(args.output))
         # Read before loading the model, so a missing file fails at once
         text = live = None
         if args.stream and not listing:

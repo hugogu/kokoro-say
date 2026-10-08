@@ -6,7 +6,15 @@ import time
 
 import pytest
 
-from kokoro_say.streaming import MAXIMUM, Sentences, TextStream, speak, stdin_pieces
+from kokoro_say.streaming import (
+    MAXIMUM,
+    SLICE,
+    Sentences,
+    Stopped,
+    TextStream,
+    speak,
+    stdin_pieces,
+)
 
 
 def sentences(text):
@@ -242,6 +250,84 @@ def test_does_not_run_far_ahead_of_playback():
         return sentence
 
     assert speak(Output(), synthesize, list("abcdefgh"), ahead=2) == 8
+
+
+def test_stops_synthesizing_once_playback_has_failed():
+    threads, synthesized = [], []
+    waiting = threading.Event()
+
+    def synthesize(sentence):
+        threads.append(threading.current_thread())
+        synthesized.append(sentence)
+        if len(synthesized) == 4:
+            waiting.set()  # one in the player's hands, two queued, the fourth held
+        return sentence
+
+    class Failing:
+        def write(self, samples):
+            waiting.wait(5)  # fail only once the producer waits for room
+            raise OSError("the sound card went away")
+
+    with pytest.raises(OSError, match="sound card"):
+        speak(Failing(), synthesize, list("abcdefghij"))
+    threads[0].join(timeout=2)
+    # a process that goes on speaking cannot keep a thread waiting for room for ever
+    assert not threads[0].is_alive()
+    assert len(synthesized) == 4
+
+
+def test_speech_that_can_be_stopped_is_written_in_slices():
+    output = Recorder()
+    stop = threading.Event()
+    assert speak(output, lambda s: [0] * (2 * SLICE + 5), ["a"], stop=stop) == 1
+    assert [len(block) for block in output.written] == [SLICE, SLICE, 5]
+
+
+def test_speech_that_cannot_be_stopped_is_written_whole():
+    output = Recorder()
+    assert speak(output, lambda s: [0] * (2 * SLICE + 5), ["a"]) == 1
+    assert [len(block) for block in output.written] == [2 * SLICE + 5]
+
+
+def test_a_stop_ends_speech_within_a_slice():
+    stop = threading.Event()
+
+    class Output(Recorder):
+        def write(self, samples):
+            super().write(samples)
+            stop.set()  # silence is asked for as the first slice plays
+
+    output = Output()
+    with pytest.raises(Stopped):
+        speak(output, lambda s: [0] * (3 * SLICE), ["a", "b"], stop=stop)
+    assert [len(block) for block in output.written] == [SLICE]
+
+
+def test_a_stop_before_the_first_sound_writes_nothing():
+    stop = threading.Event()
+    stop.set()
+    output = Recorder()
+    with pytest.raises(Stopped):
+        speak(output, str.upper, ["a"], stop=stop)
+    assert output.written == []
+
+
+def test_a_stop_does_not_wait_for_a_sentence_still_being_synthesized():
+    stop, release, threads = threading.Event(), threading.Event(), []
+
+    def synthesize(sentence):
+        threads.append(threading.current_thread())
+        release.wait(10)  # the model is busy with a long sentence
+        return sentence
+
+    threading.Timer(0.1, stop.set).start()
+    started = time.monotonic()
+    with pytest.raises(Stopped):
+        speak(Recorder(), synthesize, ["a"], stop=stop)
+    assert time.monotonic() - started < 3
+    release.set()  # the sentence is finished, and nothing comes of it
+    threads[0].join(timeout=2)
+    assert not threads[0].is_alive()
 
 
 def test_reports_a_synthesis_that_fails():

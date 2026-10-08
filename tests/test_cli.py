@@ -1,4 +1,6 @@
 import hashlib
+import importlib.abc
+import importlib.machinery
 import importlib.metadata
 import io
 import os
@@ -15,30 +17,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+import kokoro_say
 from kokoro_say import cli
-
-needs_model = pytest.mark.skipif(
-    not (cli.model_dir() / "voices-v1.0.bin").exists(),
-    reason="needs the Kokoro model files locally",
-)
-
-
-class FakeKokoro:
-    def __init__(self):
-        self.calls = []
-        self.phonemes = []  # what was given as phonemes rather than as text
-        self.unspeakable = ""  # text that has no phonemes, as "***" has
-
-    def get_voices(self):
-        return ["af_heart", "bf_emma", "zf_xiaobei"]
-
-    def create(self, text, voice, speed, lang, is_phonemes=False):
-        self.calls.append((text, voice, speed, lang))
-        if is_phonemes:
-            self.phonemes.append(text)
-        if self.unspeakable and self.unspeakable in text:
-            raise ValueError(f"Nothing to synthesize, {text!r} produced no phonemes")
-        return np.zeros(24_000, dtype=np.float32), 24_000
 
 
 class Terminal(io.StringIO):
@@ -46,45 +26,6 @@ class Terminal(io.StringIO):
 
     def isatty(self):
         return True
-
-
-class FakeOutput:
-    def __init__(self):
-        self.calls = []
-        self.written = []
-
-    def start(self):
-        self.calls.append("start")
-
-    def write(self, block):
-        self.written.append(block)
-
-    def stop(self):
-        self.calls.append("stop")
-
-    def close(self):
-        self.calls.append("close")
-
-
-@pytest.fixture
-def kokoro(monkeypatch, tmp_path):
-    fake = FakeKokoro()
-    monkeypatch.setattr(cli, "ensure_model", lambda folder: folder)
-    monkeypatch.setattr(cli, "load_kokoro", lambda folder: fake)
-    monkeypatch.setenv("KOKORO_MODELS", str(tmp_path / "models"))
-    return fake
-
-
-@pytest.fixture
-def output(monkeypatch):
-    fake = FakeOutput()
-
-    def open_output(rate):
-        fake.rate = rate
-        return fake
-
-    monkeypatch.setattr(cli, "open_output", open_output)
-    return fake
 
 
 def test_installs_the_command_as_ksay():
@@ -124,6 +65,31 @@ def test_saves_speech_to_a_file(kokoro, tmp_path, capsys):
 @pytest.mark.parametrize("suffix", [".wav", ".flac", ".ogg", ".mp3"])
 def test_saves_every_documented_format(kokoro, tmp_path, suffix):
     out = tmp_path / f"hello{suffix}"
+    assert cli.main(["Hello there.", "-o", str(out)]) == 0
+    assert sf.info(out).duration == pytest.approx(1.0, abs=0.1)
+
+
+@pytest.mark.parametrize("name", ["speech.m4a", "speech"])
+def test_refuses_a_file_name_that_names_no_audio_format(kokoro, tmp_path, capsys, name):
+    out = tmp_path / name
+    assert cli.main(["Hello there.", "-o", str(out)]) == 1
+    assert capsys.readouterr().err == (
+        f"ksay: cannot save {out}: end the name in .wav, .flac, .ogg or .mp3\n"
+    )
+    assert kokoro.calls == []  # it failed before the model was even used
+    assert not out.exists()
+
+
+def test_refuses_a_folder_that_does_not_exist(kokoro, tmp_path, capsys):
+    out = tmp_path / "nowhere" / "speech.wav"
+    assert cli.main(["Hello there.", "-o", str(out)]) == 1
+    err = capsys.readouterr().err
+    assert err == f"ksay: cannot save {out}: the folder {out.parent} does not exist\n"
+    assert kokoro.calls == []
+
+
+def test_saves_in_any_format_soundfile_writes(kokoro, tmp_path):
+    out = tmp_path / "speech.aiff"  # not one of the four documented, yet it works
     assert cli.main(["Hello there.", "-o", str(out)]) == 0
     assert sf.info(out).duration == pytest.approx(1.0, abs=0.1)
 
@@ -197,6 +163,21 @@ def test_listing_voices_never_reads_stdin(kokoro, monkeypatch, capsys):
     monkeypatch.setattr(sys, "stdin", Unreadable())
     assert cli.main(["--list-voices"]) == 0
     assert "af_heart" in capsys.readouterr().out
+
+
+@pytest.fixture
+def no_server(monkeypatch):
+    """A server module that fails the test if anything tries to start a server.
+
+    Without it, a check that went missing would start a real server in the test.
+    """
+
+    def refuse(*args):
+        raise AssertionError("a server was started")
+
+    module = types.SimpleNamespace(serve=refuse, serve_http=refuse)
+    monkeypatch.setitem(sys.modules, "kokoro_say.mcp_server", module)
+    monkeypatch.setattr(kokoro_say, "mcp_server", module, raising=False)
 
 
 @pytest.fixture
@@ -328,6 +309,24 @@ def test_streaming_nothing_is_an_error(kokoro, output, monkeypatch):
     assert output.calls == ["start", "stop", "close"]  # the device was opened first
 
 
+def test_the_device_is_opened_without_touching_signal_handlers(output):
+    # signal.signal() works on the main thread only, and a server speaks on others
+    errors = []
+
+    def play():
+        try:
+            with cli.device() as device:
+                device.write(np.zeros(10, dtype=np.float32))
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=play)
+    thread.start()
+    thread.join()
+    assert errors == []
+    assert output.calls == ["start", "stop", "close"]
+
+
 @pytest.mark.parametrize("argv", [["Hello"], ["Hello", "--stream"]])
 def test_ctrl_c_ends_speech_at_once(kokoro, output, monkeypatch, argv):
     handlers = []
@@ -357,12 +356,158 @@ def test_lists_voices(kokoro, capsys, argv):
         ["Hello", "-s", "3"],  # speed out of range
         ["--voices", "bf_emma", "Hello"],  # not an option
         ["Hello", "--stream", "-o", "hello.wav"],  # plays or saves, not both
+        ["--mcp", "-s", "3"],  # speed out of range, as for any other speech
     ],
 )
 def test_rejects_bad_arguments(kokoro, argv):
     with pytest.raises(SystemExit) as exit:
         cli.main(argv)
     assert exit.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--mcp", "Hello"],
+        ["--mcp", "-f", "notes.txt"],
+        ["--mcp", "-o", "hello.wav"],
+        ["--mcp", "--stream"],
+        ["--mcp", "-l", "en-us"],
+        ["--mcp", "--list-voices"],
+        ["--mcp", "-v", "?"],
+    ],
+)
+def test_mcp_serves_requests_so_it_takes_nothing_to_speak(kokoro, no_server, argv):
+    with pytest.raises(SystemExit) as exit:
+        cli.main(argv)
+    assert exit.value.code == 2
+    assert kokoro.calls == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("8765", ("127.0.0.1", 8765)),
+        (":8765", ("127.0.0.1", 8765)),
+        ("0.0.0.0:8765", ("0.0.0.0", 8765)),
+        ("192.168.1.10:80", ("192.168.1.10", 80)),
+        ("mac.local:8765", ("mac.local", 8765)),
+        ("[::1]:8765", ("::1", 8765)),
+        ("[::]:8765", ("::", 8765)),
+    ],
+)
+def test_parses_where_to_listen(value, expected):
+    assert cli.parse_listen(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "host", "host:", "8765x", "0", "65536", "-1", "a b:80", "[::1:80", "ho_st:80"],
+)
+def test_rejects_an_address_it_cannot_listen_on(value):
+    with pytest.raises(ValueError, match=r"\[HOST:\]PORT"):
+        cli.parse_listen(value)
+
+
+@pytest.mark.parametrize(
+    ("host", "loopback"),
+    [
+        ("127.0.0.1", True),
+        ("localhost", True),
+        ("::1", True),
+        ("0.0.0.0", False),
+        ("::", False),
+        ("192.168.1.10", False),
+        ("mac.local", False),
+    ],
+)
+def test_knows_which_hosts_are_only_this_machine(host, loopback):
+    assert cli.is_loopback(host) is loopback
+
+
+def test_the_token_comes_from_a_file_before_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "e" * 20)
+    token_file = tmp_path / "token"
+    token_file.write_text("f" * 20 + "\n", encoding="utf-8")  # an editor adds a newline
+    assert cli.read_token(str(token_file)) == "f" * 20
+    assert cli.read_token(None) == "e" * 20
+
+
+def test_there_is_no_token_unless_one_is_given(monkeypatch):
+    monkeypatch.delenv("KSAY_MCP_TOKEN", raising=False)
+    assert cli.read_token(None) is None
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "  ")
+    assert cli.read_token(None) is None  # a blank variable is not a token
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("short", "at least 16 characters"),
+        ("a token with spaces in it", "ASCII"),
+        ("é" * 20, "ASCII"),
+        ("\n", "is empty"),
+    ],
+)
+def test_refuses_a_token_it_cannot_trust(tmp_path, text, message):
+    token_file = tmp_path / "token"
+    token_file.write_text(text, encoding="utf-8")
+    with pytest.raises(RuntimeError, match=message):
+        cli.read_token(str(token_file))
+
+
+def test_refuses_a_token_in_the_environment_that_is_too_short(monkeypatch):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "short")
+    with pytest.raises(RuntimeError, match="at least 16 characters"):
+        cli.read_token(None)
+
+
+def test_refuses_a_token_file_it_cannot_read(tmp_path):
+    with pytest.raises(RuntimeError, match="cannot read .*missing"):
+        cli.read_token(str(tmp_path / "missing"))
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["--listen", "0.0.0.0:8765"], "needs a token"),
+        (["--listen", "mac.local:8765"], "needs a token"),
+        (["--listen", "[::]:8765"], "needs a token"),
+        (["--listen", "nonsense"], "is not [HOST:]PORT"),
+        (["--listen", "8765", "Hello"], "takes no text"),
+        (["--listen", "8765", "-o", "hello.wav"], "takes no text"),
+        (["--mcp", "--token-file", "token"], "goes with --listen"),
+    ],
+)
+def test_listen_refuses_what_is_unsafe_or_meaningless(
+    kokoro, no_server, monkeypatch, capsys, argv, message
+):
+    monkeypatch.delenv("KSAY_MCP_TOKEN", raising=False)
+    with pytest.raises(SystemExit) as exit:
+        cli.main(argv)
+    assert exit.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_a_token_that_is_too_weak_is_an_argument_error(
+    kokoro, no_server, monkeypatch, capsys
+):
+    monkeypatch.setenv("KSAY_MCP_TOKEN", "short")
+    with pytest.raises(SystemExit) as exit:
+        cli.main(["--listen", "0.0.0.0:8765"])
+    assert exit.value.code == 2
+    assert "at least 16 characters" in capsys.readouterr().err
+
+
+def test_mcp_without_its_extra_says_how_to_get_it(kokoro, monkeypatch, capsys):
+    # What is already imported would hide the missing package: load it all afresh
+    monkeypatch.setitem(sys.modules, "mcp.server", None)  # makes the import fail
+    monkeypatch.delitem(sys.modules, "kokoro_say.mcp_server", raising=False)
+    monkeypatch.delattr(kokoro_say, "mcp_server", raising=False)
+    assert cli.main(["--mcp"]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("ksay: --mcp needs the mcp extra (kokoro-say[mcp]): ")
+    assert "Traceback" not in err
 
 
 def test_downloads_missing_model_files_once(tmp_path):
@@ -449,6 +594,64 @@ def test_counts_the_performance_cores(monkeypatch, system, code, out, cores):
     assert cli.performance_cores() == cores
 
 
+def test_the_tests_keep_onnxruntime_offline_too():
+    # a flaky abort of the whole run, at exit, is what it looks like when they do not
+    assert os.environ["ORT_DISABLE_TELEMETRY"] == "1"
+
+
+def test_onnxruntime_is_told_not_to_call_home_before_it_is_imported(monkeypatch):
+    seen = []
+
+    class Importing(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        """Stands in for onnxruntime, and notes what the environment says on import."""
+
+        def find_spec(self, name, path, target=None):
+            if name == "onnxruntime":
+                return importlib.machinery.ModuleSpec(name, self)
+
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            seen.append(os.environ.get("ORT_DISABLE_TELEMETRY"))
+            raise ImportError("a stand-in that goes no further")
+
+    monkeypatch.setenv("ORT_DISABLE_TELEMETRY", "")  # so that it is unset again after
+    monkeypatch.delenv("ORT_DISABLE_TELEMETRY")
+    monkeypatch.delitem(sys.modules, "onnxruntime", raising=False)
+    monkeypatch.setattr(cli, "shorten_espeak_path", lambda: None)
+    monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(sys, "meta_path", [Importing(), *sys.meta_path])
+    with pytest.raises(ImportError, match="stand-in"):
+        cli.load_kokoro(Path("models"))
+    # it is not the Python function: that does not stop the connection
+    assert seen == ["1"]
+
+
+def test_runs_without_sysctl_where_the_path_has_none(monkeypatch):
+    # A launchd job, cron or a client that passes no PATH finds /usr/sbin/sysctl
+    # nowhere. Speaking is not worth failing over: it only chooses the cores.
+    def missing(command, **options):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.subprocess, "run", missing)
+    assert cli.performance_cores() is None
+
+
+def test_asks_sysctl_by_its_whole_name(monkeypatch):
+    asked = []
+
+    def sysctl(command, **options):
+        asked.append(command[0])
+        return subprocess.CompletedProcess(command, 0, stdout="8\n")
+
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.subprocess, "run", sysctl)
+    assert cli.performance_cores() == 8
+    assert asked == ["/usr/sbin/sysctl"]  # a PATH without /usr/sbin does not matter
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra rights")
 def test_shortens_a_long_espeak_data_path(monkeypatch, tmp_path):
     import espeakng_loader
@@ -501,21 +704,21 @@ def test_keeps_espeak_library_copies_between_runs(monkeypatch, tmp_path):
     assert run() != first  # while a changed library is copied afresh
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_loads_the_real_model_on_the_performance_cores():
     kokoro = cli.load_kokoro(cli.model_dir())
     threads = kokoro.sess.get_session_options().intra_op_num_threads
     assert threads == (cli.performance_cores() or 0)  # 0: onnxruntime decides
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_speaks_with_the_real_model(tmp_path):
     out = tmp_path / "real.wav"
     assert cli.main(["Hello from Kokoro.", "-o", str(out)]) == 0
     assert 0.5 < sf.info(out).duration < 5
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_streams_with_the_real_model(output):
     assert cli.main(["Hello from Kokoro. This part is streamed.", "--stream"]) == 0
     audio = np.concatenate(output.written)
@@ -523,7 +726,7 @@ def test_streams_with_the_real_model(output):
     assert 1 < len(audio) / output.rate < 8
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_speaks_a_sentence_before_the_next_has_been_written(output, monkeypatch, pipe):
     heard = threading.Event()
     play = output.write
