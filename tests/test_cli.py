@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+import kokoro_say
 from kokoro_say import cli
 
 
@@ -338,12 +339,43 @@ def test_lists_voices(kokoro, capsys, argv):
         ["Hello", "-s", "3"],  # speed out of range
         ["--voices", "bf_emma", "Hello"],  # not an option
         ["Hello", "--stream", "-o", "hello.wav"],  # plays or saves, not both
+        ["--mcp", "-s", "3"],  # speed out of range, as for any other speech
     ],
 )
 def test_rejects_bad_arguments(kokoro, argv):
     with pytest.raises(SystemExit) as exit:
         cli.main(argv)
     assert exit.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--mcp", "Hello"],
+        ["--mcp", "-f", "notes.txt"],
+        ["--mcp", "-o", "hello.wav"],
+        ["--mcp", "--stream"],
+        ["--mcp", "-l", "en-us"],
+        ["--mcp", "--list-voices"],
+        ["--mcp", "-v", "?"],
+    ],
+)
+def test_mcp_serves_requests_so_it_takes_nothing_to_speak(kokoro, argv):
+    with pytest.raises(SystemExit) as exit:
+        cli.main(argv)
+    assert exit.value.code == 2
+    assert kokoro.calls == []
+
+
+def test_mcp_without_its_extra_says_how_to_get_it(kokoro, monkeypatch, capsys):
+    # What is already imported would hide the missing package: load it all afresh
+    monkeypatch.setitem(sys.modules, "mcp.server", None)  # makes the import fail
+    monkeypatch.delitem(sys.modules, "kokoro_say.mcp_server", raising=False)
+    monkeypatch.delattr(kokoro_say, "mcp_server", raising=False)
+    assert cli.main(["--mcp"]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("ksay: --mcp needs the mcp extra (kokoro-say[mcp]): ")
+    assert "Traceback" not in err
 
 
 def test_downloads_missing_model_files_once(tmp_path):

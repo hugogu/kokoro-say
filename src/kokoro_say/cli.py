@@ -78,6 +78,9 @@ MISSING_ZH = (
 )
 
 
+MISSING_MCP = "ksay: --mcp needs the mcp extra (kokoro-say[mcp]): {}"
+
+
 def to_kokoro(text: str, lang: str) -> tuple[str, bool]:
     """What to give Kokoro for this text, and whether that is phonemes already.
 
@@ -427,21 +430,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-dir",
         help="model folder (default: $KOKORO_MODELS, else ~/.cache/kokoro-onnx)",
     )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="serve MCP on standard input and output, for an AI assistant to speak "
+        "through, instead of speaking text (needs the mcp extra)",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     return parser
+
+
+def serve_mcp(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """`ksay --mcp`: answer MCP requests instead of speaking text."""
+    listing = args.list_voices or args.voice == "?"
+    given = [args.text, args.input_file, args.output, args.lang]
+    if any(value is not None for value in given) or args.stream or listing:
+        parser.error("--mcp takes no text, -f, -o, --stream, -l or --list-voices")
+    try:
+        from kokoro_say import mcp_server
+    except ImportError as error:  # not installed, or too old; say which
+        print(MISSING_MCP.format(error), file=sys.stderr)
+        return 1
+    mcp_server.serve(args.voice, args.speed, args.model_dir)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not MIN_SPEED <= args.speed <= MAX_SPEED:
+        parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
+    if args.mcp:
+        return serve_mcp(parser, args)
     listing = args.list_voices or args.voice == "?"
     if args.text is not None and args.input_file is not None:
         parser.error("give the text or -f FILE, not both")
     if not listing and args.text is None and args.input_file is None:
         if stdin_is_terminal():
             parser.error("give the text to speak, or -f FILE, or pipe it in")
-    if not MIN_SPEED <= args.speed <= MAX_SPEED:
-        parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
 
     try:
         if args.output:
