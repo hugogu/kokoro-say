@@ -319,7 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     destination = parser.add_mutually_exclusive_group()
     destination.add_argument(
-        "-o", "--output", help="save to this file (.wav, .flac or .ogg) instead"
+        "-o", "--output", help="save to this file (.wav, .flac, .ogg or .mp3) instead"
     )
     destination.add_argument(
         "--stream",
