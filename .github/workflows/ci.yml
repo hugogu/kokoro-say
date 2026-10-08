@@ -28,7 +28,7 @@ jobs:
           path: ~/.cache/kokoro-onnx
           key: kokoro-onnx-model-v1.0
       # The zh extra is skipped by itself on Python 3.13 and later
-      - run: uv sync --extra zh
+      - run: uv sync --extra zh --extra mcp
       - run: uv run ruff check
       - run: uv run ruff format --check
       # Downloads the model when the cache is cold, through the installed command.

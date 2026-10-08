@@ -23,6 +23,10 @@ dependencies = ["kokoro-onnx>=0.6.1", "sounddevice>=0.5", "soundfile>=0.12"]
 # Kokoro's own Chinese front end. It adds about 100 MB, and misaki declares
 # support for Python before 3.13 only.
 zh = ["misaki[zh]>=0.9.4; python_version < '3.13'"]
+# The Model Context Protocol server behind `ksay --mcp`, which lets AI assistants
+# speak through ksay. It adds about 30 MB, loaded only when the server starts.
+# Capped below 3 because 2.0 renamed FastMCP and changed other APIs.
+mcp = ["mcp>=2.3,<3"]
 
 [project.urls]
 Homepage = "https://github.com/hugogu/kokoro-say"
