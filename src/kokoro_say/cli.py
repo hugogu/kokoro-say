@@ -24,6 +24,8 @@ from kokoro_say import __version__, chinese
 from kokoro_say.streaming import TextStream, speak, stdin_pieces
 
 DEFAULT_VOICE = "af_heart"
+MIN_SPEED = 0.5
+MAX_SPEED = 2.0
 SAMPLE_RATE = 24_000  # the only rate Kokoro-82M speaks at
 SENTENCE_PAUSE = 0.25  # seconds of silence kokoro-onnx leaves between its own batches
 CLAUSE_PAUSE = 0.1
@@ -424,8 +426,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not listing and args.text is None and args.input_file is None:
         if stdin_is_terminal():
             parser.error("give the text to speak, or -f FILE, or pipe it in")
-    if not 0.5 <= args.speed <= 2.0:
-        parser.error("speed must be between 0.5 and 2.0")
+    if not MIN_SPEED <= args.speed <= MAX_SPEED:
+        parser.error(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
 
     try:
         # Read before loading the model, so a missing file fails at once
