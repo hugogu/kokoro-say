@@ -122,6 +122,29 @@
   rehearsed in a `python:3.11.14-slim-bookworm` container with the model folder mounted
   read-only and `KOKORO_MODELS` pointing at it: the CLI and the server then both play
   236,840 bytes of "Hello from CI." into the fake card.
+- `--listen [HOST:]PORT` serves the same tools over Streamable HTTP (`mcp_server.http_app`,
+  `serve_http`, uvicorn) for an assistant on another machine; `docs/remote.md` is the
+  guide, written for OpenClaw. Decisions that are easy to undo by accident: loopback is
+  the default and anything else is refused without a token (`cli.serve_mcp`); the token is
+  a small ASGI middleware, because the SDK's own bearer auth is that of an OAuth resource
+  server and wants an issuer URL; `save_speech` is not offered, and the decision lives in
+  `http_app`, so that the tests and `serve_http` cannot disagree about it; sessions never
+  idle-expire, since the SDK's 30 minutes would make an assistant that speaks now and then
+  fail once after every pause. The SDK turns the Host check on only for the literal hosts
+  `127.0.0.1`, `localhost` and `::1`; elsewhere the token is all there is. The SDK has two
+  HTTP flavours, with sessions and without (there a cancel is a closed response), and
+  cancelling a speech works in both: `test_http_cancelling_a_call_stops_the_speech` runs
+  each. OpenClaw reads a `url` entry with no `transport` as SSE, which is not served.
+- Test HTTP with a real uvicorn thread on port 0 (`listening()` in the tests), and
+  `Client(streamable_http_client(url, http_client=httpx2.AsyncClient(headers=...)))`; a
+  client without the token raises an `ExceptionGroup` around `MCPError`. The real check of
+  the setup it is for is a client in a `python:3.11.14-slim-bookworm` container, reaching
+  the Mac through `host.docker.internal`, and Claude Code with `"type": "http"` and
+  `headers`. Never let a test that must refuse something be able to start a server: a
+  mutation of the token check started one on all interfaces with no token, the test hung,
+  and the orphan outlived its timeout; the stand-in `no_server` fixture and process groups
+  in the mutation script came out of that. `env -i HOME=... ksay ...` shows what a launchd
+  job, cron or a client without a PATH meets: `sysctl` was not found there.
 - onnxruntime 1.30 on macOS and Linux opens an HTTPS connection to a Microsoft telemetry
   service (`mobile.events.data.microsoft.com`) about nine seconds after `import
   onnxruntime`, with nothing loaded, and a process that lives on aborts as it exits:

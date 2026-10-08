@@ -129,7 +129,7 @@ ksay -v '?'                                  # list the voices
 
 ```text
 ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
-     [--list-voices] [--model-dir DIR] [--mcp]
+     [--list-voices] [--model-dir DIR] [--mcp [--listen [HOST:]PORT] [--token-file FILE]]
 ```
 
 | Option | Meaning |
@@ -143,6 +143,8 @@ ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
 | `-l LANG` | espeak language code; by default it follows the voice |
 | `--model-dir DIR` | Model folder (default `$KOKORO_MODELS`, else `~/.cache/kokoro-onnx`) |
 | `--mcp` | Serve [MCP](#use-it-from-an-ai-assistant) on standard input and output, for an AI assistant, instead of speaking text; `-v`, `-s` and `--model-dir` then set the defaults of its calls |
+| `--listen [HOST:]PORT` | Serve MCP over HTTP at this address instead, for an assistant on another machine ([how](docs/remote.md)); the host defaults to this machine alone, and any other needs a token |
+| `--token-file FILE` | With `--listen`: the file that holds the token that requests must send as a bearer token (default `$KSAY_MCP_TOKEN`) |
 
 A voice's first letter is its language and the second is `f` or `m`:
 
@@ -240,14 +242,19 @@ The server offers three tools:
 | Tool | What it does |
 | --- | --- |
 | `speak(text, voice, speed)` | Says the text through the speakers, and returns when the speech is over |
-| `save_speech(text, path, voice, speed, overwrite)` | Writes `.wav`, `.flac`, `.ogg` or `.mp3`; a file that exists is left alone unless `overwrite` is true |
+| `save_speech(text, path, voice, speed, overwrite)` | Writes `.wav`, `.flac`, `.ogg` or `.mp3`; a file that exists is left alone unless `overwrite` is true. Only over standard input and output |
 | `list_voices()` | Names the voices |
 
 Things to know:
 
-- **It speaks on the machine that runs it**, through that machine's default audio output,
-  so it suits an assistant on your own computer. It talks over standard input and output
-  only, which is how these assistants start a local server.
+- **It speaks on the machine that runs it**, through that machine's default audio output.
+  Over standard input and output, which is how these assistants start a local server, the
+  assistant is on that machine too. An assistant on another machine, such as OpenClaw on
+  a Linux server that is to talk to you through your Mac, connects over HTTP instead:
+  `ksay --mcp --listen 0.0.0.0:8765 --token-file TOKEN`. That is the subject of
+  [Speak on a Mac for an assistant on another machine](docs/remote.md), which covers the
+  token, the choice between a trusted network, a VPN and an SSH tunnel, OpenClaw's
+  settings, and starting the server at login.
 - **Calls take turns.** There is one voice and one sound card, so a second `speak` waits
   for the first. Cancelling a call stops the speech almost at once.
 - **`speak` returns when the speech is over**, which takes as long as reading the text
@@ -414,7 +421,9 @@ through the pipeline of `--stream`, so the first sentence is heard while the res
 generated, and `save_speech` through the one of `-o`. What a server adds is what a
 command never needed: it loads the model once and keeps it, takes one call at a time,
 stops the speech when a call is cancelled, and restarts PortAudio before each speech,
-because PortAudio lists the audio devices only when it starts.
+because PortAudio lists the audio devices only when it starts. Over HTTP (`--listen`) it
+is the same server behind uvicorn, with a bearer token in front of it, sessions that
+last until the client ends them, and no `save_speech`.
 
 ## Troubleshooting
 
@@ -430,6 +439,8 @@ because PortAudio lists the audio devices only when it starts.
   terminal. It should say that it is serving and wait; the assistant's MCP log shows what
   the server writes to standard error. Apps that do not start from your shell may need
   the full path of `ksay`.
+- **An assistant on another machine cannot reach the server, or gets `401` or `421`**: see
+  [Troubleshooting](docs/remote.md#troubleshooting) in the page on remote assistants.
 - **A `speak` call fails with `cannot open the audio output`**: the machine that runs the
   server has no audio output, or none that it may use. Use `save_speech` instead.
 - **`Chinese tones need Kokoro's own front end`**: the `zh` extra is not installed, or
