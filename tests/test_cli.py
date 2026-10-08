@@ -328,6 +328,24 @@ def test_streaming_nothing_is_an_error(kokoro, output, monkeypatch):
     assert output.calls == ["start", "stop", "close"]  # the device was opened first
 
 
+def test_the_device_is_opened_without_touching_signal_handlers(output):
+    # signal.signal() works on the main thread only, and a server speaks on others
+    errors = []
+
+    def play():
+        try:
+            with cli.device() as device:
+                device.write(np.zeros(10, dtype=np.float32))
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=play)
+    thread.start()
+    thread.join()
+    assert errors == []
+    assert output.calls == ["start", "stop", "close"]
+
+
 @pytest.mark.parametrize("argv", [["Hello"], ["Hello", "--stream"]])
 def test_ctrl_c_ends_speech_at_once(kokoro, output, monkeypatch, argv):
     handlers = []

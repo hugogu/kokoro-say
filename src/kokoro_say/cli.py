@@ -278,6 +278,18 @@ def open_output(rate: int):
 
 
 @contextlib.contextmanager
+def device():
+    """The default audio device, started, and released however the block ends."""
+    output = open_output(SAMPLE_RATE)
+    try:
+        output.start()
+        yield output
+        output.stop()  # returns once the buffered audio has played
+    finally:
+        output.close()  # discards whatever an error left unplayed
+
+
+@contextlib.contextmanager
 def speaker():
     """The default audio device, opened before any speech is generated.
 
@@ -285,16 +297,14 @@ def speaker():
     straight to it instead of through a file and a player process. Python
     would turn Ctrl-C into an exception and then wait for the batch still
     being synthesized, so Ctrl-C keeps its default action and ends the process.
+    That is a setting of the main thread, which is why `device` is apart.
     """
-    output = open_output(SAMPLE_RATE)
     interrupt = signal.signal(signal.SIGINT, signal.SIG_DFL)
     try:
-        output.start()
-        yield output
-        output.stop()  # returns once the buffered audio has played
+        with device() as output:
+            yield output
     finally:
         signal.signal(signal.SIGINT, interrupt)
-        output.close()  # discards whatever an error left unplayed
 
 
 def synthesizer(kokoro, voice: str, speed: float, lang: str):
