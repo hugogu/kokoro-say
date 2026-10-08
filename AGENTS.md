@@ -8,6 +8,14 @@
   each new library file once, 0.45 to 0.8 s apiece. `reuse_espeak_copies` keeps
   the copies in `~/.cache/kokoro-say`. Time each stage before blaming the model
   when start-up slows down.
+- A pop at the end of speech was a CoreAudio I/O overload as the stream stopped,
+  not the waveform (it ends 50 dB down) and not a cut-off tail (`stop()` waits for
+  the audio to drain). PortAudio's low-latency default makes the built-in speakers
+  run a 29-frame buffer, 0.3 ms, instead of their usual 512; `block_size()` fixes
+  that. `coreaudiod` reports it in the unified log, so look there before guessing:
+  `/usr/bin/log show --start "<time>" --predicate 'process == "coreaudiod"' | grep
+  Overload` (plain `log` is a zsh builtin). It printed 1–2 events per default
+  playback and none with an explicit block size.
 - `speaker()` gives SIGINT its default action while kokoro-say generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with

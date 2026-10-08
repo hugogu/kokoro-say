@@ -211,6 +211,23 @@ def test_explains_a_missing_portaudio(monkeypatch):
         cli.open_output(24_000)
 
 
+@pytest.mark.parametrize(
+    ("system", "size"), [("Darwin", 512), ("Linux", 0), ("Windows", 0)]
+)
+def test_sizes_the_audio_buffer_for_the_system(monkeypatch, system, size):
+    settings = {}
+
+    class Stream:
+        def __init__(self, **options):
+            settings.update(options)
+
+    sounddevice = types.SimpleNamespace(OutputStream=Stream, PortAudioError=Exception)
+    monkeypatch.setitem(sys.modules, "sounddevice", sounddevice)
+    monkeypatch.setattr(cli.platform, "system", lambda: system)
+    cli.open_output(24_000)
+    assert settings["blocksize"] == size
+
+
 def test_explains_a_missing_audio_device(monkeypatch):
     class PortAudioError(Exception):
         pass

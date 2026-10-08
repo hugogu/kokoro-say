@@ -209,6 +209,18 @@ def load_kokoro(folder: Path):
     return Kokoro.from_session(session, voices)
 
 
+def block_size() -> int:
+    """Frames per audio buffer; 0 leaves the choice to PortAudio.
+
+    PortAudio's low-latency default asks CoreAudio for the smallest buffer a
+    device allows, 29 frames (0.3 ms) on a MacBook Pro's speakers. Such a stream
+    overruns its I/O cycle as it stops, coreaudiod logs an "IO Overload", and
+    the speech ends with a pop. 512 frames is what the built-in devices use
+    otherwise, and speech needs no low latency.
+    """
+    return 512 if platform.system() == "Darwin" else 0
+
+
 def open_output(rate: int):
     """A mono stream on the default audio device; kept separate for tests."""
     try:
@@ -219,7 +231,9 @@ def open_output(rate: int):
             "sudo apt install libportaudio2, or save it with -o"
         ) from error
     try:
-        return sd.OutputStream(samplerate=rate, channels=1, dtype="float32")
+        return sd.OutputStream(
+            samplerate=rate, channels=1, dtype="float32", blocksize=block_size()
+        )
     except sd.PortAudioError as error:
         raise RuntimeError(f"cannot open the audio output: {error}") from error
 
