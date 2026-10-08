@@ -49,3 +49,29 @@ jobs:
             test "$status" -le 1
             if grep -q Traceback <<<"$output"; then exit 1; fi
           done
+      # An ALSA default device that writes what it is given to a file stands in
+      # for a sound card, so PortAudio's playback is tested for real.
+      - name: Play through a fake sound card
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libportaudio2
+          cat > ~/.asoundrc <<ASOUND
+          pcm.!default {
+              type plug
+              slave { pcm "dump"; format S16_LE; rate 48000; channels 2 }
+          }
+          pcm.dump {
+              type file
+              slave.pcm "null"
+              file "$RUNNER_TEMP/played.raw"
+              format "raw"
+          }
+          ASOUND
+          for flags in "" "--stream"; do
+            rm -f "$RUNNER_TEMP/played.raw"
+            uv run ksay $flags "Hello from CI."
+            bytes=$(stat -c %s "$RUNNER_TEMP/played.raw")
+            echo "ksay $flags played $bytes bytes"
+            test "$bytes" -gt 150000 -a "$bytes" -lt 400000  # about 1.2 s at 192 kB/s
+          done
