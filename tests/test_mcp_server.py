@@ -1,4 +1,3 @@
-import logging
 import os
 import re
 import signal
@@ -337,9 +336,13 @@ def test_leaves_a_missing_portaudio_to_the_device_to_explain(monkeypatch):
     mcp_server.rescan_devices()  # no error here: opening the device says what is wrong
 
 
-def test_phonemizer_warnings_stay_out_of_the_log():
+def test_phonemizer_warnings_stay_out_of_the_log(caplog):
+    from phonemizer.logger import get_logger
+
     mcp_server.create_server()
-    assert not logging.getLogger("phonemizer").isEnabledFor(logging.WARNING)
+    # as a backend does when it is made, which is after the server: then it warns
+    get_logger().warning("words count mismatch on 100.0% of the lines (1/1)")
+    assert caplog.records == []
 
 
 def test_ksay_mcp_serves_with_the_options_it_was_given(monkeypatch):

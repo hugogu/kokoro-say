@@ -221,9 +221,11 @@ def create_server(
         version=__version__,
         description="Speak or save text with the Kokoro-82M neural voices, offline.",
     )
-    # The SDK has set up logging now, which would let through what the command leaves
-    # unheard: phonemizer warns when eSpeak NG spells out an acronym such as MCP
-    logging.getLogger("phonemizer").setLevel(logging.ERROR)
+    # The SDK has set up logging now, and phonemizer's warnings would reach it, which
+    # the command never shows: eSpeak NG spells out an acronym such as MCP, say. Only
+    # propagation can be switched off, as phonemizer sets the level as each backend
+    # is made, which happens when the model loads, after this.
+    logging.getLogger("phonemizer").propagate = False
 
     def tool(**hints):
         """Register a function as a text tool, described by its docstring."""
