@@ -13,12 +13,39 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.14"]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python }}
+      # With the model present the tests that speak for real run; without it
+      # they are skipped. Bump the key if the model files change.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/kokoro-onnx
+          key: kokoro-onnx-model-v1.0
       - run: uv sync
       - run: uv run ruff check
       - run: uv run ruff format --check
-      - run: uv run pytest
+      # Downloads the model when the cache is cold, through the installed command.
+      - run: uv run ksay -v '?'
+      - run: uv run pytest -rs
+      - name: Save a sentence and read it back
+        run: |
+          uv run ksay "Hello from CI." -o "$RUNNER_TEMP/hello.wav"
+          uv run python -c "import sys, soundfile as sf; d = sf.info(sys.argv[1]).duration; assert 0.5 < d < 5, d" "$RUNNER_TEMP/hello.wav"
+      # Runners have no speakers: playing must either work or fail with a message.
+      - name: Play a sentence without a usable audio device
+        run: |
+          for flags in "" "--stream"; do
+            set +e
+            output=$(uv run ksay $flags "Hello from CI." 2>&1)
+            status=$?
+            set -e
+            echo "ksay $flags -> exit $status: $output"
+            test "$status" -le 1
+            if grep -q Traceback <<<"$output"; then exit 1; fi
+          done
