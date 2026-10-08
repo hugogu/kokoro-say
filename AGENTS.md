@@ -117,6 +117,11 @@
   cfg.json --strict-mcp-config --allowedTools mcp__ksay__speak ...` from an empty folder
   connects, lists the tools and calls them, for about five cents. A warm connect takes
   0.35 to 0.4 s and the first launch after an install about 3 s (uv's Python 3.11).
+  `scripts/mcp_speak.py` is that kind of client in twenty lines: CI plays through it, and
+  it is the quickest way to hear MCP playback on a machine. The Linux steps of CI can be
+  rehearsed in a `python:3.11.14-slim-bookworm` container with the model folder mounted
+  read-only and `KOKORO_MODELS` pointing at it: the CLI and the server then both play
+  236,840 bytes of "Hello from CI." into the fake card.
 - `benchmarks/` and `scripts/` hold the PEP 723 scripts behind the README's comparison
   and audio: `compare.py` and `mos.py` measure, `make_audio.py` and
   `make_intro_video.py` build `docs/audio`. Every number in the README's comparison
