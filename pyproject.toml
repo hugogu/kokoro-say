@@ -49,3 +49,4 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["needs_model: speaks with the real model, so is skipped without its files"]

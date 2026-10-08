@@ -17,74 +17,12 @@ import soundfile as sf
 
 from kokoro_say import cli
 
-needs_model = pytest.mark.skipif(
-    not (cli.model_dir() / "voices-v1.0.bin").exists(),
-    reason="needs the Kokoro model files locally",
-)
-
-
-class FakeKokoro:
-    def __init__(self):
-        self.calls = []
-        self.phonemes = []  # what was given as phonemes rather than as text
-        self.unspeakable = ""  # text that has no phonemes, as "***" has
-
-    def get_voices(self):
-        return ["af_heart", "bf_emma", "zf_xiaobei"]
-
-    def create(self, text, voice, speed, lang, is_phonemes=False):
-        self.calls.append((text, voice, speed, lang))
-        if is_phonemes:
-            self.phonemes.append(text)
-        if self.unspeakable and self.unspeakable in text:
-            raise ValueError(f"Nothing to synthesize, {text!r} produced no phonemes")
-        return np.zeros(24_000, dtype=np.float32), 24_000
-
 
 class Terminal(io.StringIO):
     """Standard input as a person at a keyboard has it."""
 
     def isatty(self):
         return True
-
-
-class FakeOutput:
-    def __init__(self):
-        self.calls = []
-        self.written = []
-
-    def start(self):
-        self.calls.append("start")
-
-    def write(self, block):
-        self.written.append(block)
-
-    def stop(self):
-        self.calls.append("stop")
-
-    def close(self):
-        self.calls.append("close")
-
-
-@pytest.fixture
-def kokoro(monkeypatch, tmp_path):
-    fake = FakeKokoro()
-    monkeypatch.setattr(cli, "ensure_model", lambda folder: folder)
-    monkeypatch.setattr(cli, "load_kokoro", lambda folder: fake)
-    monkeypatch.setenv("KOKORO_MODELS", str(tmp_path / "models"))
-    return fake
-
-
-@pytest.fixture
-def output(monkeypatch):
-    fake = FakeOutput()
-
-    def open_output(rate):
-        fake.rate = rate
-        return fake
-
-    monkeypatch.setattr(cli, "open_output", open_output)
-    return fake
 
 
 def test_installs_the_command_as_ksay():
@@ -544,21 +482,21 @@ def test_keeps_espeak_library_copies_between_runs(monkeypatch, tmp_path):
     assert run() != first  # while a changed library is copied afresh
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_loads_the_real_model_on_the_performance_cores():
     kokoro = cli.load_kokoro(cli.model_dir())
     threads = kokoro.sess.get_session_options().intra_op_num_threads
     assert threads == (cli.performance_cores() or 0)  # 0: onnxruntime decides
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_speaks_with_the_real_model(tmp_path):
     out = tmp_path / "real.wav"
     assert cli.main(["Hello from Kokoro.", "-o", str(out)]) == 0
     assert 0.5 < sf.info(out).duration < 5
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_streams_with_the_real_model(output):
     assert cli.main(["Hello from Kokoro. This part is streamed.", "--stream"]) == 0
     audio = np.concatenate(output.written)
@@ -566,7 +504,7 @@ def test_streams_with_the_real_model(output):
     assert 1 < len(audio) / output.rate < 8
 
 
-@needs_model
+@pytest.mark.needs_model
 def test_speaks_a_sentence_before_the_next_has_been_written(output, monkeypatch, pipe):
     heard = threading.Event()
     play = output.write
