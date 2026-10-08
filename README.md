@@ -62,6 +62,21 @@ in batches of up to about half a minute, and each batch plays while the next
 one is generated, joined without a gap as long as generation runs faster than
 speech. Text shorter than one batch gains nothing.
 
+## Platforms
+
+| System | Speech to a file | Playback |
+| --- | --- | --- |
+| macOS, Apple silicon | CI | CI on the runner's audio device; by ear on an M2 Max |
+| Linux, x86-64 | CI | CI, into a fake ALSA sound card; needs `libportaudio2` |
+| Linux, arm64 | by hand, in a container | by hand, into a fake ALSA sound card |
+| Windows, x64 | CI | not heard on real speakers; CI checks the message when there is no audio device |
+
+CI runs the real model on GitHub Actions with Python 3.11 and 3.14. Intel Macs
+are not supported, because onnxruntime stopped publishing macOS wheels for them
+after 1.23.2. Windows on Arm has a wheel for every dependency but has not been
+run. On some Linux virtual machines, GitHub's runners among them, onnxruntime
+prints a harmless warning about PCI bus discovery.
+
 ## Related tools
 
 - [nazdridoy/kokoro-tts](https://github.com/nazdridoy/kokoro-tts) is the fuller

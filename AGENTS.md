@@ -17,6 +17,10 @@
   `/usr/bin/log show --start "<time>" --predicate 'process == "coreaudiod"' | grep
   Overload` (plain `log` is a zsh builtin). It printed 1–2 events per default
   playback and none with an explicit block size.
+- Linux playback is tested without a sound card: `~/.asoundrc` points ALSA's
+  default device at its `file` plugin and the test counts the bytes written (see
+  the last CI step; a container does the same locally). Windows playback has only
+  been run against a machine without an audio device.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with
