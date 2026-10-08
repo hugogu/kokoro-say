@@ -1,11 +1,13 @@
 import hashlib
 import importlib.metadata
 import io
+import os
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import types
 from pathlib import Path
 
@@ -14,11 +16,6 @@ import pytest
 import soundfile as sf
 
 from kokoro_say import cli
-
-STREAM_PARTS = [
-    np.linspace(-1, 1, 5_000, dtype=np.float32),
-    np.ones(300, dtype=np.float32),
-]
 
 needs_model = pytest.mark.skipif(
     not (cli.model_dir() / "voices-v1.0.bin").exists(),
@@ -29,18 +26,16 @@ needs_model = pytest.mark.skipif(
 class FakeKokoro:
     def __init__(self):
         self.calls = []
+        self.unspeakable = ""  # text that has no phonemes, as "***" has
 
     def get_voices(self):
         return ["af_heart", "bf_emma", "zf_xiaobei"]
 
     def create(self, text, voice, speed, lang):
         self.calls.append((text, voice, speed, lang))
+        if self.unspeakable and self.unspeakable in text:
+            raise ValueError(f"Nothing to synthesize, {text!r} produced no phonemes")
         return np.zeros(24_000, dtype=np.float32), 24_000
-
-    async def create_stream(self, text, voice, speed, lang):
-        self.calls.append((text, voice, speed, lang))
-        for part in STREAM_PARTS:
-            yield part, 24_000
 
 
 class Terminal(io.StringIO):
@@ -219,14 +214,46 @@ def test_fails_before_synthesis_without_an_audio_device(kokoro, monkeypatch, cap
     assert capsys.readouterr().err.startswith("ksay: cannot open the audio output")
 
 
-def test_streams_the_parts_through_one_output(kokoro, output):
-    assert cli.main(["Hello", "--stream", "-v", "bf_emma"]) == 0
-    assert kokoro.calls == [("Hello", "bf_emma", 1.0, "en-gb")]
+def test_streams_each_sentence_through_one_output(kokoro, output):
+    text = "The first sentence is here. The second one follows it."
+    assert cli.main([text, "--stream", "-v", "bf_emma"]) == 0
+    assert kokoro.calls == [
+        ("The first sentence is here.", "bf_emma", 1.0, "en-gb"),
+        ("The second one follows it.", "bf_emma", 1.0, "en-gb"),
+    ]
     assert output.rate == 24_000
     assert output.calls == ["start", "stop", "close"]
-    assert len(output.written) == len(STREAM_PARTS)
-    for written, part in zip(output.written, STREAM_PARTS, strict=True):
-        np.testing.assert_array_equal(written, part)
+    # a sentence stop calls for 0.25 s of silence, before the next sentence only
+    assert [len(block) for block in output.written] == [24_000, 24_000 + 6_000]
+    assert all(block.dtype == np.float32 for block in output.written)
+
+
+def test_streams_a_file_and_piped_text(kokoro, output, monkeypatch, tmp_path):
+    source = tmp_path / "chapter.txt"
+    source.write_text("Read from a file, sentence by sentence.", encoding="utf-8")
+    assert cli.main(["-f", str(source), "--stream"]) == 0
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Read from a pipe, then say it."))
+    assert cli.main(["--stream"]) == 0
+    assert [call[0] for call in kokoro.calls] == [
+        "Read from a file, sentence by sentence.",
+        "Read from a pipe, then say it.",
+    ]
+
+
+def test_streaming_skips_what_cannot_be_said(kokoro, output):
+    kokoro.unspeakable = "***"
+    text = "The first sentence is here.\n\n***\n\nThe last sentence is here."
+    assert cli.main([text, "--stream"]) == 0
+    assert len(kokoro.calls) == 3  # it was tried
+    assert len(output.written) == 2  # and left out
+
+
+def test_streaming_nothing_is_an_error(kokoro, output, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO("  \n"))
+    with pytest.raises(SystemExit) as exit:
+        cli.main(["--stream"])
+    assert exit.value.code == 2
+    assert output.calls == ["start", "stop", "close"]  # the device was opened first
 
 
 @pytest.mark.parametrize("argv", [["Hello"], ["Hello", "--stream"]])
@@ -422,3 +449,30 @@ def test_streams_with_the_real_model(output):
     audio = np.concatenate(output.written)
     assert audio.dtype == np.float32  # what the float32 output stream accepts
     assert 1 < len(audio) / output.rate < 8
+
+
+@needs_model
+def test_speaks_a_sentence_before_the_next_has_been_written(output, monkeypatch, pipe):
+    heard = threading.Event()
+    play = output.write
+
+    def write(samples):
+        play(samples)
+        heard.set()
+
+    monkeypatch.setattr(output, "write", write)
+    early = []
+
+    def produce():
+        os.write(pipe, b"The first sentence is long enough to be spoken. ")
+        # a process that waited for the end of its input would never get past this
+        early.append(heard.wait(timeout=120))
+        os.write(pipe, b"The second one comes afterwards.")
+        os.close(pipe)
+
+    producer = threading.Thread(target=produce)
+    producer.start()
+    assert cli.main(["--stream"]) == 0
+    producer.join()
+    assert early == [True]
+    assert len(output.written) == 2

@@ -67,6 +67,9 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
   eSpeak NG (2.2).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
+- **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
+  answer of a language model or a growing log is heard from its first sentence, not
+  after its last. `say` waits for the end of its input.
 - **Familiar.** `ksay "text"`, `-o file`, standard input, `-v voice`, `-s speed`.
 - **Quick to start talking.** A second or two to the first word on an M2 Max, and
   `--stream` begins speaking a long text before it has been generated.
@@ -113,7 +116,7 @@ ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
 | `text`, `-` | What to say; `-` reads standard input, and so does leaving it out when input is piped |
 | `-f FILE`, `--input-file FILE` | Read the text from a UTF-8 file; `-` reads standard input |
 | `-o FILE` | Save to `.wav`, `.flac`, `.ogg` or `.mp3` instead of playing |
-| `--stream` | Start speaking before the whole text has been generated |
+| `--stream` | Speak each sentence as soon as it is generated, without waiting for the rest of the text to arrive |
 | `-v VOICE` | Voice name (default `af_heart`); `-v '?'` lists them |
 | `-s SPEED` | Speaking rate from 0.5 to 2.0 (default 1.0) |
 | `-l LANG` | espeak language code; by default it follows the voice |
@@ -136,11 +139,17 @@ A voice's first letter is its language and the second is `f` or `m`:
 The English voices sound best. kokoro-onnx turns text into sounds with eSpeak NG, which
 is weaker for Japanese and Chinese than Kokoro's own `misaki`.
 
-Speech plays through PortAudio and starts once the whole passage has been generated,
-or sooner with `--stream`: kokoro-onnx generates speech in batches of up to about half
-a minute, and each batch plays while the next one is generated, joined without a gap
-as long as generation runs faster than speech. Text shorter than one batch gains
-nothing from it.
+Speech plays through PortAudio. It starts once the whole text has been read and
+generated, or sooner with `--stream`: the text is cut into sentences, each is spoken as
+soon as it is generated, and the next is generated while one plays, so they join
+without a gap as long as generation runs faster than speech. Streaming does not wait
+for the end of the input either, so text piped in as it is written is heard as it is
+written:
+
+```sh
+# a sentence every two seconds; ksay speaks each one as it arrives
+for s in "This is the first sentence." "Here is the second one."; do echo "$s"; sleep 2; done | ksay --stream
+```
 
 ## How it compares
 
@@ -251,8 +260,12 @@ Windows on Arm has a wheel for every dependency but has not been run.
 text ─► eSpeak NG (phonemes) ─► Kokoro-82M on ONNX Runtime (CPU) ─► audio ─► speakers or file
 ```
 
-Long text is split into batches of at most 510 phonemes. With `--stream`, a batch plays
-while the next is generated. On Apple silicon `ksay` also runs on the performance cores,
+Long text is split into batches of at most 510 phonemes. With `--stream` the text is
+first cut into sentences, a stop ending one only when a space follows it (so `3.14` and
+`example.com` stay whole, and `Dr.` and `U.S.` do not end a sentence), as do a blank line,
+a list item and the Chinese and Japanese stops. The input is read on a thread of its
+own, a sentence is generated while the one before it plays, and text left without a stop
+is spoken after a second of quiet. On Apple silicon `ksay` also runs on the performance cores,
 keeps eSpeak NG's library copies in `~/.cache/kokoro-say` (macOS checks every new
 library once, which would cost about two seconds per run) and opens the audio device
 with a 512-frame buffer.

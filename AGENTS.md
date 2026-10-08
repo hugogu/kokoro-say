@@ -1,9 +1,11 @@
 # kokoro-say
 
-- `src/kokoro_say/cli.py` is the whole tool. The command is `ksay`; the package
-  and repository keep the name kokoro-say. Tests replace `ensure_model`,
-  `load_kokoro` and `open_output`, so no test plays sound and only the
-  `real_model` tests need the 350 MB model; they skip when it is absent.
+- `src/kokoro_say/cli.py` is the command, `ksay`; the package and repository keep the
+  name kokoro-say. `streaming.py` holds what `--stream` needs: the sentence chunker, the
+  stdin reader and the pipeline that plays one sentence while the next is generated.
+  Tests replace `ensure_model`, `load_kokoro` and `open_output`, so no test plays sound
+  and only the tests marked `needs_model` need the 350 MB model; they skip when it is
+  absent.
 - On macOS the first phonemization, not the model, made start-up slow: phonemizer
   loads four freshly written copies of the espeak-ng library, and macOS checks
   each new library file once, 0.45 to 0.8 s apiece. `reuse_espeak_copies` keeps
@@ -21,6 +23,14 @@
   default device at its `file` plugin and the test counts the bytes written (see
   the last CI step; a container does the same locally). Windows playback has only
   been run against a machine without an audio device.
+- `--stream` speaks text as it arrives, which `say` does not: it reads all its input
+  first (watch its output file stay at the 4 KB header until the producer closes the
+  pipe). Standard input is read with `os.read` on a daemon thread, never through
+  `sys.stdin`'s buffer: a daemon thread blocked there makes Python abort at exit with
+  status 134. A stop ends a sentence only when white space follows, so the last stop of
+  a piece waits for more text and the one-second idle flush speaks what is left.
+  kokoro-onnx adds its 0.25 s sentence pause only between its own batches, so each
+  sentence is led by the pause the one before it called for, and nothing trails the last.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with

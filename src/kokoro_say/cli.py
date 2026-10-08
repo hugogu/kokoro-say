@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import contextlib
 import filecmp
 import hashlib
@@ -17,14 +16,17 @@ import sys
 import tempfile
 import types
 import urllib.request
-from collections.abc import AsyncIterable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
 from kokoro_say import __version__
+from kokoro_say.streaming import TextStream, speak, stdin_pieces
 
 DEFAULT_VOICE = "af_heart"
 SAMPLE_RATE = 24_000  # the only rate Kokoro-82M speaks at
+SENTENCE_PAUSE = 0.25  # seconds of silence kokoro-onnx leaves between its own batches
+CLAUSE_PAUSE = 0.1
 MODEL_RELEASE = (
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 )
@@ -258,19 +260,27 @@ def speaker():
         output.close()  # discards whatever an error left unplayed
 
 
-def stream(output, parts: AsyncIterable) -> None:
-    """Play the parts of Kokoro.create_stream while later ones are generated.
+def synthesizer(kokoro, voice: str, speed: float, lang: str):
+    """A function from one sentence to the samples that speak it.
 
-    kokoro-onnx synthesizes the next part while one plays, and one output
-    stream carries them all, so they join without a gap whenever synthesis
-    keeps ahead of playback.
+    Each sentence is led by the pause the one before it calls for, so the
+    speech joins as kokoro-onnx joins its own batches and ends without a gap.
     """
+    import numpy as np
+    from kokoro_onnx.chunker import pause_after
 
-    async def play() -> None:
-        async for samples, _ in parts:
-            output.write(samples)
+    pause = 0.0
 
-    asyncio.run(play())
+    def synthesize(sentence: str):
+        nonlocal pause
+        try:
+            samples, rate = kokoro.create(sentence, voice=voice, speed=speed, lang=lang)
+        except ValueError:  # nothing in it can be said, such as "***" or an emoji
+            return None
+        lead, pause = pause, pause_after(sentence, SENTENCE_PAUSE, CLAUSE_PAUSE)
+        return np.pad(samples, (round(lead * rate), 0))
+
+    return synthesize
 
 
 def stdin_is_terminal() -> bool:
@@ -278,17 +288,18 @@ def stdin_is_terminal() -> bool:
     return sys.stdin is None or sys.stdin.isatty()
 
 
-def read_text(text: str | None, input_file: str | None) -> str:
-    """The text to speak: the argument, a file, or stdin.
-
-    Stdin is read for `-`, for `-f -`, and when neither an argument nor a file
-    is given, the way `say` does.
-    """
+def reads_stdin(text: str | None, input_file: str | None) -> bool:
+    """Whether the text comes from stdin: `-`, `-f -`, or neither text nor file."""
     source = text if input_file is None else input_file
-    if source is None or source == "-":
+    return source is None or source == "-"
+
+
+def read_text(text: str | None, input_file: str | None) -> str:
+    """The text to speak: the argument, a file, or all of stdin."""
+    if reads_stdin(text, input_file):
         return sys.stdin.read()
     if input_file is None:
-        return source
+        return text
     try:
         # utf-8-sig, so a byte order mark from a Windows editor is not spoken
         return Path(input_file).expanduser().read_text(encoding="utf-8-sig")
@@ -324,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     destination.add_argument(
         "--stream",
         action="store_true",
-        help="start speaking before the whole text has been generated",
+        help="speak each sentence as soon as it has arrived and been generated",
     )
     parser.add_argument(
         "-v",
@@ -363,7 +374,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         # Read before loading the model, so a missing file fails at once
-        text = None if listing else read_text(args.text, args.input_file)
+        text = live = None
+        if args.stream and not listing:
+            pieces = (
+                stdin_pieces()
+                if reads_stdin(args.text, args.input_file)
+                else [read_text(args.text, args.input_file)]
+            )
+            live = TextStream(pieces)  # reads on at once: text may arrive meanwhile
+        elif not listing:
+            text = read_text(args.text, args.input_file)
         kokoro = load_kokoro(ensure_model(model_dir(args.model_dir)))
         voices = sorted(kokoro.get_voices())
         if listing:
@@ -371,9 +391,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.voice not in voices:
             parser.error(f"unknown voice {args.voice!r}; list them with: ksay -v '?'")
+        lang = args.lang or language_for(args.voice)
+        if live is not None:
+            with speaker() as output:
+                synthesize = synthesizer(kokoro, args.voice, args.speed, lang)
+                spoken = speak(output, synthesize, live)
+            if not spoken:
+                parser.error("there is no text to speak")
+            return 0
         if not text.strip():
             parser.error("there is no text to speak")
-        lang = args.lang or language_for(args.voice)
         if args.output:
             import soundfile as sf
 
@@ -384,16 +411,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"saved {args.output} ({len(samples) / rate:.2f}s)", file=sys.stderr)
             return 0
         with speaker() as output:
-            if args.stream:
-                parts = kokoro.create_stream(
-                    text, voice=args.voice, speed=args.speed, lang=lang
-                )
-                stream(output, parts)
-            else:
-                samples, _ = kokoro.create(
-                    text, voice=args.voice, speed=args.speed, lang=lang
-                )
-                output.write(samples)
+            samples, _ = kokoro.create(
+                text, voice=args.voice, speed=args.speed, lang=lang
+            )
+            output.write(samples)
     except (OSError, RuntimeError) as error:
         print(f"ksay: {error}", file=sys.stderr)
         return 1
