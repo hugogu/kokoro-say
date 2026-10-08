@@ -7,8 +7,8 @@
   </picture>
 </h1>
 
-**Natural-sounding text-to-speech for your terminal.**<br>
-Offline, free, and as easy to use as `say`.
+**Natural-sounding text-to-speech for your terminal, on macOS, Linux and Windows.**<br>
+Offline, free, and as easy to use as `say`, which only macOS has.
 
 [![CI](https://github.com/hugogu/kokoro-say/actions/workflows/ci.yml/badge.svg)](https://github.com/hugogu/kokoro-say/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -60,11 +60,20 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
 
 ## Why ksay
 
-- **Natural voices.** Kokoro-82M is a neural model with 54 voices in 8 languages. In
-  the [comparison](#how-it-compares) below it scores 4.5 out of 5 on predicted
-  naturalness: level with the default voice of macOS `say` (4.4) and with clean human
-  recordings (4.3 to 4.4), ahead of the classic Samantha voice (4.0) and far ahead of
-  eSpeak NG (2.2).
+- **The same command on macOS, Linux and Windows.** `say` exists only on macOS. On
+  Linux the usual built-in, eSpeak NG, scores 2.2 out of 5 on predicted naturalness in
+  the [comparison](#how-it-compares), and Windows keeps its natural Narrator voices to
+  itself: other programs reach them only through
+  [unofficial adapters](https://github.com/gexgd0419/NaturalVoiceSAPIAdapter). The
+  natural-sounding offline choice there is an engine such as
+  [Piper](https://github.com/OHF-Voice/piper1-gpl), which this page has not compared.
+  `ksay` is one install and one command that speaks, the same on all three and tested in
+  CI with the real model.
+- **Natural voices.** Kokoro-82M is a neural model with 54 voices in 8 languages, English
+  best of all. In the [comparison](#how-it-compares) below it scores 4.5 out of 5 on
+  predicted naturalness: level with the default voice of macOS `say` (4.4) and with clean
+  human recordings (4.3 to 4.4), ahead of the classic Samantha voice (4.0) and far ahead
+  of eSpeak NG (2.2).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
 - **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
@@ -138,7 +147,12 @@ A voice's first letter is its language and the second is `f` or `m`:
 | Mandarin Chinese | 8 | `zf_xiaobei`, `zm_yunxi` |
 
 The English voices sound best. kokoro-onnx turns text into sounds with eSpeak NG, which
-is weaker for Japanese and Chinese than Kokoro's own `misaki`.
+is weaker for Japanese than Kokoro's own `misaki` and does not suit Chinese. Its Chinese
+output has no tones (Kokoro's vocabulary has no place for eSpeak's tone marks) and no
+punctuation. An English word inside Chinese text arrives wrapped in language-switch
+markers that reach the model as phonemes, and an English voice names every Chinese
+character "Chinese letter". `misaki` keeps the tones, and `ksay` does not use it yet, so
+Chinese, and Chinese mixed with English, are not supported well.
 
 Speech plays through PortAudio. It starts once the whole text has been read and
 generated, or sooner with `--stream`: the text is cut into sentences, each is spoken as
@@ -266,7 +280,7 @@ say -v Samantha "The salt breeze came across from the sea."
 - **eSpeak NG** when the footprint matters more than the voice: a small device, many
   languages, or text that must be spoken at once.
 
-Not compared: Apple's downloadable Enhanced and Premium voices (none was installed);
+Not compared: Apple's downloadable Enhanced and Premium voices (no English one was installed);
 Windows' built-in voices; other neural engines such as Piper; cloud services.
 
 ## Platforms
@@ -337,6 +351,8 @@ with `scripts/make_intro_video.py` and `scripts/make_compare_video.py`; the numb
   documents: EPUB and PDF chapters and voice blending.
 - [hexgrad/kokoro](https://github.com/hexgrad/kokoro), the official package, runs on
   PyTorch and pronounces English best (`python -m kokoro`).
+- [Piper](https://github.com/OHF-Voice/piper1-gpl) is a fast, local neural text-to-speech
+  engine (GPL-3.0). It has not been compared with `ksay` here.
 
 ## Credits and licences
 

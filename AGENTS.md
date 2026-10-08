@@ -45,6 +45,20 @@
   Homebrew's 3.12 and 0.70 s on Homebrew's 3.14 (`benchmarks/imports.py`), and a bare
   interpreter 13, 21 and 54 ms. State the interpreter in every timing report and use the
   one that `uv tool install` gives, uv's own: `uv run --python 3.11 benchmarks/...`.
+- eSpeak NG is the wrong front end for Chinese, and so for Chinese mixed with English. For
+  'cmn' it emits tone digits that Kokoro's vocabulary lacks, so the filter leaves toneless
+  IPA, and it drops full-width punctuation. It wraps English words in `(en)...(cmn)` flags
+  that survive the filter as phonemes, and an English voice reads each character as
+  "Chinese letter". Kokoro's own front end is `misaki` (`pip install 'misaki[zh]'`, about
+  16 MB, no spaCy): `ZHG2P()` with no version is what the v1.0 voices were trained on
+  (version '1.1' is for the separate v1.1-zh model), and its output goes to
+  `kokoro.create(..., is_phonemes=True)` with tone arrows intact. Its legacy path leaves
+  English untouched; English phonemized with `misaki.espeak.EspeakG2P` and spoken by a
+  Chinese voice is hard to follow (an English recognizer caught 0 or 1 of 4 test words),
+  while an English voice for the English words caught all 4. `say`'s Chinese voices
+  caught 0 to 3 of 4, and one of them, Tingting (Enhanced), is installed on the test Mac.
+  Run a recognizer at temperature 0 for checks like this: with sampling the same file
+  scored 4 of 4 once and 0 of 4 the next time.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with
