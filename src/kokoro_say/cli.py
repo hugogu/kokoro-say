@@ -76,8 +76,6 @@ MISSING_ZH = (
     "ksay: Chinese tones need Kokoro's own front end, the zh extra "
     "(kokoro-say[zh], Python 3.12 or older); speaking it with eSpeak NG, without tones"
 )
-
-
 MISSING_MCP = "ksay: --mcp needs the mcp extra (kokoro-say[mcp]): {}"
 
 

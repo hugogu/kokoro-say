@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterable, Iterator
 MINIMUM = 15  # characters; shorter sentences ("Dr.", "Yes.") join the next one
 MAXIMUM = 300  # characters; text with no stop is cut at a space this far in
 IDLE = 1.0  # seconds of silence after which an unfinished sentence is spoken
-TICK = 0.1  # seconds between looks at whether anyone is still waiting for a sentence
+TICK = 0.1  # seconds between looks at whether a wait is still wanted
 SLICE = 2_400  # frames written at a time when speech can be stopped: 0.1 s at 24 kHz
 
 BOUNDARY = re.compile(
