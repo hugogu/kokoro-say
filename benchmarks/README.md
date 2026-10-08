@@ -61,8 +61,8 @@ downloads PyTorch and about 400 MB of UTMOS weights; both are cached afterwards.
 - `say` was tested twice: plain `say`, which speaks with the voice selected in the Mac's
   settings (on the test Mac a modern voice rendered by a helper process, not Samantha),
   and `say -v Samantha`, the classic compact voice. The default voice depends on the
-  Mac, so on yours that row may measure another one. The Enhanced and Premium voices
-  that macOS can download were not installed. Apple's licence does not allow publishing
+  Mac, so on yours that row may measure another one. No English Enhanced or Premium
+  voice that macOS can download was installed (one Chinese voice, Tingting, was). Apple's licence does not allow publishing
   recordings of its voices, so this repository holds no `say` audio; `--samples` writes
   it to your own disk for your own listening.
 - Not tested: Windows' built-in voices, Piper and other neural engines, cloud services.
