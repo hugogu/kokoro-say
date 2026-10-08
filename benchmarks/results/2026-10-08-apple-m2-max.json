@@ -1,0 +1,192 @@
+{
+  "environment": {
+    "date": "2026-10-08",
+    "system": "macOS 26.7.1",
+    "chip": "Apple M2 Max",
+    "cores": 12,
+    "memory_gb": 64,
+    "python": "3.14.3",
+    "onnxruntime": "1.30.0",
+    "kokoro_onnx": "0.6.1",
+    "ksay_commit": "0b7769d",
+    "whisper_model": "small.en"
+  },
+  "speed": {
+    "ksay": {
+      "short": {
+        "seconds": 1.7112966044805944,
+        "audio_seconds": 1.7493333333333334,
+        "times_real": 1.0222268476155154,
+        "peak_mb": 586.5625
+      },
+      "medium": {
+        "seconds": 4.446938083565328,
+        "audio_seconds": 21.845333333333333,
+        "times_real": 4.912443781051896,
+        "peak_mb": 944.703125
+      },
+      "long": {
+        "seconds": 14.930220791953616,
+        "audio_seconds": 91.31,
+        "times_real": 6.115783635913137,
+        "peak_mb": 1030.5625
+      }
+    },
+    "say": {
+      "short": {
+        "seconds": 0.8048861040733755,
+        "audio_seconds": 1.8031746031746032,
+        "times_real": 2.2402854193271318,
+        "peak_mb": 35.75
+      },
+      "medium": {
+        "seconds": 0.8997733749565668,
+        "audio_seconds": 20.31419501133787,
+        "times_real": 22.577012808718038,
+        "peak_mb": 36.125
+      },
+      "long": {
+        "seconds": 1.2262862079078332,
+        "audio_seconds": 85.43455782312925,
+        "times_real": 69.66934576300027,
+        "peak_mb": 36.046875
+      }
+    },
+    "eSpeak NG": {
+      "short": {
+        "seconds": 0.3793105835211463,
+        "audio_seconds": 1.6888888888888889,
+        "times_real": 4.452522450628469,
+        "peak_mb": 46.0
+      },
+      "medium": {
+        "seconds": 0.3970645625377074,
+        "audio_seconds": 21.200589569160996,
+        "times_real": 53.39330569735161,
+        "peak_mb": 50.34375
+      },
+      "long": {
+        "seconds": 0.43837162503041327,
+        "audio_seconds": 85.54448979591837,
+        "times_real": 195.141484784704,
+        "peak_mb": 68.359375
+      }
+    }
+  },
+  "intelligibility": {
+    "ksay": {
+      "plain": {
+        "wer": 0.006211180124223602,
+        "perfect": 19,
+        "sentences": 20,
+        "mistakes": [
+          {
+            "said": "The box was thrown beside the parked truck.",
+            "heard": "The box was thrown beside the park truck."
+          }
+        ]
+      },
+      "numbers": {
+        "wer": 0.0,
+        "perfect": 10,
+        "sentences": 10,
+        "mistakes": []
+      }
+    },
+    "say": {
+      "plain": {
+        "wer": 0.024844720496894408,
+        "perfect": 16,
+        "sentences": 20,
+        "mistakes": [
+          {
+            "said": "The juice of lemons makes fine punch.",
+            "heard": "juice of lemons makes fine punch."
+          },
+          {
+            "said": "Four hours of steady work faced us.",
+            "heard": "Four hours of study work faced us."
+          },
+          {
+            "said": "A rod is used to catch pink salmon.",
+            "heard": "A rot is used to catch pink salmon."
+          },
+          {
+            "said": "Smoky fires lack flame and heat.",
+            "heard": "Smokey fires lack flame and heat."
+          }
+        ]
+      },
+      "numbers": {
+        "wer": 0.0,
+        "perfect": 10,
+        "sentences": 10,
+        "mistakes": []
+      }
+    },
+    "eSpeak NG": {
+      "plain": {
+        "wer": 0.15527950310559005,
+        "perfect": 11,
+        "sentences": 20,
+        "mistakes": [
+          {
+            "said": "The birch canoe slid on the smooth planks.",
+            "heard": "The birch can do slid on the smooth planks."
+          },
+          {
+            "said": "These days a chicken leg is a rare dish.",
+            "heard": "I'm paying a chicken leg in a rare dish."
+          },
+          {
+            "said": "Four hours of steady work faced us.",
+            "heard": "Four hours of steady work phase does."
+          },
+          {
+            "said": "A large size in stockings is hard to sell.",
+            "heard": "large sizes talking is hard to sell."
+          },
+          {
+            "said": "Kick the ball straight and follow through.",
+            "heard": "kick them all straight and follow through."
+          },
+          {
+            "said": "A pot of tea helps to pass the evening.",
+            "heard": "a part of the help staff has this evening."
+          },
+          {
+            "said": "Smoky fires lack flame and heat.",
+            "heard": "Smokey fire zack flame and heat."
+          },
+          {
+            "said": "The soft cushion broke the man's fall.",
+            "heard": "The soft cushion broke the men's fall."
+          },
+          {
+            "said": "The salt breeze came across from the sea.",
+            "heard": "The salt trees came across from the sea."
+          }
+        ]
+      },
+      "numbers": {
+        "wer": 0.04504504504504504,
+        "perfect": 7,
+        "sentences": 10,
+        "mistakes": [
+          {
+            "said": "Her name is Siobhan Nguyen, and she works at Qualcomm in San Jose.",
+            "heard": "Her name is Siobhan Nguyen, and she works at Welcome in San Jose."
+          },
+          {
+            "said": "The Federal Reserve raised interest rates by a quarter of a percentage point in 2018.",
+            "heard": "The Federal Reserve raised interest rates like water of a percentage point in 2018."
+          },
+          {
+            "said": "The trip takes 45 minutes by train and 20 minutes on foot.",
+            "heard": "The trip takes 45 minutes, I train and 20 minutes on foot."
+          }
+        ]
+      }
+    }
+  }
+}
