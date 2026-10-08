@@ -27,6 +27,29 @@ from math import gcd
 from pathlib import Path
 
 
+def load_predictor():
+    """UTMOS22's strong learner, from SpeechMOS (downloads its weights once)."""
+    import torch
+
+    return torch.hub.load(
+        "tarepan/SpeechMOS:v1.2.0", "utmos22_strong", trust_repo=True, verbose=False
+    )
+
+
+def predict(predictor, wave, rate: int) -> float:
+    """The predicted mean opinion score of one recording, 1 (bad) to 5 (excellent)."""
+    import torch
+    from scipy.signal import resample_poly
+
+    if wave.ndim > 1:
+        wave = wave.mean(axis=1)
+    divisor = gcd(16_000, rate)
+    wave = resample_poly(wave, 16_000 // divisor, rate // divisor)
+    with torch.no_grad():
+        score = predictor(torch.from_numpy(wave.astype("float32")).unsqueeze(0), 16_000)
+    return float(score)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("samples", type=Path, help="a folder of folders of recordings")
@@ -34,26 +57,14 @@ def main() -> int:
     args = parser.parse_args()
 
     import soundfile as sf
-    import torch
-    from scipy.signal import resample_poly
 
-    predictor = torch.hub.load(
-        "tarepan/SpeechMOS:v1.2.0", "utmos22_strong", trust_repo=True, verbose=False
-    )
+    predictor = load_predictor()
     scores = {}
     for folder in sorted(path for path in args.samples.iterdir() if path.is_dir()):
         by_file = {}
         for path in sorted(folder.iterdir()):
             wave, rate = sf.read(path, dtype="float32")
-            if wave.ndim > 1:
-                wave = wave.mean(axis=1)
-            divisor = gcd(16_000, rate)
-            wave = resample_poly(wave, 16_000 // divisor, rate // divisor)
-            with torch.no_grad():
-                score = predictor(
-                    torch.from_numpy(wave.astype("float32")).unsqueeze(0), 16_000
-                )
-            by_file[path.name] = float(score)
+            by_file[path.name] = predict(predictor, wave, rate)
         values = list(by_file.values())
         scores[folder.name] = {
             "mean": statistics.mean(values),

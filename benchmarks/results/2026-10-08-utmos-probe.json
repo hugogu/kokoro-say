@@ -1,0 +1,46 @@
+{
+  "untouched": {
+    "mean": 4.51127552986145,
+    "stdev": 0.02580220057763862
+  },
+  "telephone bandwidth (low-pass at 3.4 kHz)": {
+    "mean": 4.456756067276001,
+    "stdev": 0.03890804994588126
+  },
+  "white noise 20 dB below the speech": {
+    "mean": 3.980657124519348,
+    "stdev": 0.10227447118820891
+  },
+  "white noise 10 dB below the speech": {
+    "mean": 2.4673282861709596,
+    "stdev": 0.25965624075423804
+  },
+  "30 dB quieter": {
+    "mean": 4.442141723632813,
+    "stdev": 0.04628291953618296
+  },
+  "24 dB louder, then clipped": {
+    "mean": 2.7963089466094972,
+    "stdev": 0.12992389159287296
+  },
+  "coarse six-bit quantisation": {
+    "mean": 3.196217751502991,
+    "stdev": 0.10697683301335573
+  },
+  "played 25% faster (the pitch rises too)": {
+    "mean": 4.075090169906616,
+    "stdev": 0.1395716738273403
+  },
+  "played 20% slower (the pitch drops too)": {
+    "mean": 4.4797210693359375,
+    "stdev": 0.030356832349381503
+  },
+  "played backwards": {
+    "mean": 1.6030369043350219,
+    "stdev": 0.11632131745072956
+  },
+  "white noise and no speech": {
+    "mean": 1.4330629229545593,
+    "stdev": 0.1147721202315079
+  }
+}
