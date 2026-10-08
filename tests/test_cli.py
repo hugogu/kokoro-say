@@ -26,13 +26,16 @@ needs_model = pytest.mark.skipif(
 class FakeKokoro:
     def __init__(self):
         self.calls = []
+        self.phonemes = []  # what was given as phonemes rather than as text
         self.unspeakable = ""  # text that has no phonemes, as "***" has
 
     def get_voices(self):
         return ["af_heart", "bf_emma", "zf_xiaobei"]
 
-    def create(self, text, voice, speed, lang):
+    def create(self, text, voice, speed, lang, is_phonemes=False):
         self.calls.append((text, voice, speed, lang))
+        if is_phonemes:
+            self.phonemes.append(text)
         if self.unspeakable and self.unspeakable in text:
             raise ValueError(f"Nothing to synthesize, {text!r} produced no phonemes")
         return np.zeros(24_000, dtype=np.float32), 24_000
@@ -196,6 +199,52 @@ def test_listing_voices_never_reads_stdin(kokoro, monkeypatch, capsys):
     assert "af_heart" in capsys.readouterr().out
 
 
+@pytest.fixture
+def misaki(monkeypatch):
+    """The Chinese front end, replaced by one that wraps its input."""
+    monkeypatch.setattr(cli.chinese, "available", lambda: True)
+    monkeypatch.setattr(cli.chinese, "phonemize", lambda text: f"<{text}>")
+
+
+def test_chinese_voices_speak_the_phonemes_of_the_chinese_front_end(
+    kokoro, misaki, tmp_path
+):
+    out = tmp_path / "zh.wav"
+    assert cli.main(["你好，世界。", "-v", "zf_xiaobei", "-o", str(out)]) == 0
+    assert kokoro.calls == [("<你好，世界。>", "zf_xiaobei", 1.0, "cmn")]
+    assert kokoro.phonemes == ["<你好，世界。>"]
+
+
+def test_other_voices_are_left_to_kokoro_onnx(kokoro, misaki, tmp_path):
+    assert cli.main(["Hello", "-v", "bf_emma", "-o", str(tmp_path / "en.wav")]) == 0
+    assert kokoro.calls == [("Hello", "bf_emma", 1.0, "en-gb")]
+    assert kokoro.phonemes == []
+
+
+def test_chinese_without_misaki_is_spoken_from_the_text_and_says_so(
+    kokoro, monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setattr(cli.chinese, "available", lambda: False)
+    assert cli.main(["你好", "-v", "zf_xiaobei", "-o", str(tmp_path / "zh.wav")]) == 0
+    assert kokoro.calls == [("你好", "zf_xiaobei", 1.0, "cmn")]
+    assert kokoro.phonemes == []
+    assert "kokoro-say[zh]" in capsys.readouterr().err
+
+
+def test_chinese_text_in_an_english_voice_suggests_a_chinese_voice(
+    kokoro, monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setattr(cli.chinese, "available", lambda: False)
+    assert cli.main(["你好 world", "-o", str(tmp_path / "zh.wav")]) == 0
+    assert "-v zf_xiaobei" in capsys.readouterr().err
+
+
+def test_english_text_gets_no_notes(kokoro, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.chinese, "available", lambda: False)
+    assert cli.main(["Hello", "-o", str(tmp_path / "en.wav")]) == 0
+    assert capsys.readouterr().err.startswith("saved ")
+
+
 def test_plays_when_there_is_no_output_file(kokoro, output):
     assert cli.main(["Hello", "-s", "1.2"]) == 0
     assert kokoro.calls[0][2] == 1.2
@@ -238,6 +287,18 @@ def test_streams_a_file_and_piped_text(kokoro, output, monkeypatch, tmp_path):
         "Read from a file, sentence by sentence.",
         "Read from a pipe, then say it.",
     ]
+
+
+def test_streams_chinese_sentence_by_sentence(kokoro, misaki, output, monkeypatch):
+    monkeypatch.setattr(cli.chinese, "phonemize", lambda text: text.replace("。", "."))
+    text = "今天我们来讨论一下这个非常重要的问题。然后大家一起来回答它并且给出想法。"
+    assert cli.main([text, "--stream", "-v", "zf_xiaobei"]) == 0
+    assert kokoro.phonemes == [
+        "今天我们来讨论一下这个非常重要的问题.",
+        "然后大家一起来回答它并且给出想法.",
+    ]
+    # the stop at the end of the first sentence calls for a pause, read in the phonemes
+    assert [len(block) for block in output.written] == [24_000, 24_000 + 6_000]
 
 
 def test_streaming_skips_what_cannot_be_said(kokoro, output):

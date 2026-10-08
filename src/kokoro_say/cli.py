@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
-from kokoro_say import __version__
+from kokoro_say import __version__, chinese
 from kokoro_say.streaming import TextStream, speak, stdin_pieces
 
 DEFAULT_VOICE = "af_heart"
@@ -68,6 +68,35 @@ LANGUAGES = {
 def language_for(voice: str) -> str:
     """The espeak language a voice speaks, from its prefix."""
     return LANGUAGES.get(voice[:1], "en-us")
+
+
+MISSING_ZH = (
+    "ksay: Chinese tones need Kokoro's own front end, the zh extra "
+    "(kokoro-say[zh], Python 3.12 or older); speaking it with eSpeak NG, without tones"
+)
+
+
+def to_kokoro(text: str, lang: str) -> tuple[str, bool]:
+    """What to give Kokoro for this text, and whether that is phonemes already.
+
+    Chinese goes through misaki when it is installed. Everything else is left to
+    kokoro-onnx, which uses eSpeak NG.
+    """
+    if lang == "cmn" and chinese.available():
+        return chinese.phonemize(text), True
+    return text, False
+
+
+def language_notes(text: str, lang: str, voice: str) -> list[str]:
+    """Warnings for text that the chosen voice will not speak well."""
+    if lang == "cmn" and not chinese.available():
+        return [MISSING_ZH]
+    if lang != "cmn" and chinese.has_chinese(text):
+        return [
+            f"ksay: the text has Chinese characters, which {voice} cannot read; "
+            "try -v zf_xiaobei"
+        ]
+    return []
 
 
 def model_dir(argument: str | None = None) -> Path:
@@ -270,14 +299,22 @@ def synthesizer(kokoro, voice: str, speed: float, lang: str):
     from kokoro_onnx.chunker import pause_after
 
     pause = 0.0
+    told = False
 
     def synthesize(sentence: str):
-        nonlocal pause
+        nonlocal pause, told
+        if not told:  # once, for the first sentence that shows it
+            told = bool(notes := language_notes(sentence, lang, voice))
+            for note in notes:
+                print(note, file=sys.stderr)
+        spoken, phonemes = to_kokoro(sentence, lang)
         try:
-            samples, rate = kokoro.create(sentence, voice=voice, speed=speed, lang=lang)
+            samples, rate = kokoro.create(
+                spoken, voice=voice, speed=speed, lang=lang, is_phonemes=phonemes
+            )
         except ValueError:  # nothing in it can be said, such as "***" or an emoji
             return None
-        lead, pause = pause, pause_after(sentence, SENTENCE_PAUSE, CLAUSE_PAUSE)
+        lead, pause = pause, pause_after(spoken, SENTENCE_PAUSE, CLAUSE_PAUSE)
         return np.pad(samples, (round(lead * rate), 0))
 
     return synthesize
@@ -401,19 +438,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if not text.strip():
             parser.error("there is no text to speak")
+        for note in language_notes(text, lang, args.voice):
+            print(note, file=sys.stderr)
+        spoken, phonemes = to_kokoro(text, lang)
+        options = {"voice": args.voice, "speed": args.speed, "lang": lang}
         if args.output:
             import soundfile as sf
 
-            samples, rate = kokoro.create(
-                text, voice=args.voice, speed=args.speed, lang=lang
-            )
+            samples, rate = kokoro.create(spoken, is_phonemes=phonemes, **options)
             sf.write(args.output, samples, rate)
             print(f"saved {args.output} ({len(samples) / rate:.2f}s)", file=sys.stderr)
             return 0
         with speaker() as output:
-            samples, _ = kokoro.create(
-                text, voice=args.voice, speed=args.speed, lang=lang
-            )
+            samples, _ = kokoro.create(spoken, is_phonemes=phonemes, **options)
             output.write(samples)
     except (OSError, RuntimeError) as error:
         print(f"ksay: {error}", file=sys.stderr)
