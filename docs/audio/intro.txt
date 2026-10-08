@@ -1,0 +1,9 @@
+Hi, I'm ksay, a text-to-speech command for your terminal.
+
+I speak with Kokoro, a neural voice model small enough to run on a laptop. Everything stays on your machine: no account, no API key, and no graphics card.
+
+Type ksay, then a sentence, and I'll say it out loud. Add a file name, and I'll save it instead. Pipe in a whole chapter with the stream option, and I'll start reading before I've finished generating the rest.
+
+I have fifty-four voices in eight languages, and I run on macOS, Linux, and Windows.
+
+Install me with uv, and let me read to you.
