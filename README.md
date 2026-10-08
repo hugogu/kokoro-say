@@ -62,7 +62,8 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
 
 - **Natural voices.** Kokoro-82M is a neural model with 54 voices in 8 languages. In
   the [comparison](#how-it-compares) below it scores 4.5 out of 5 on predicted
-  naturalness, against 4.0 for macOS `say` and 2.2 for eSpeak NG.
+  naturalness, against 4.0 for macOS `say` and 2.2 for eSpeak NG, and about where the same
+  model puts clean human recordings (4.3 to 4.4).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
 - **Familiar.** `ksay "text"`, `-o file`, standard input, `-v voice`, `-s speed`.
@@ -168,9 +169,12 @@ Times include starting the program. `ksay` needs a 354 MB model and 134 MB of pa
 | Word error rate, 10 with numbers, dates and names | **0.0%** | **0.0%** | 4.5% |
 
 Word error rate is how often Whisper transcribed the recording wrongly; lower is better.
-Predicted naturalness comes from a neural model trained on listening tests: it ranks
-engines well but is not a listener, and with 30 sentences a gap of a point or two in
-word error rate is noise.
+Predicted naturalness comes from [UTMOS22](docs/utmos.md), a neural model trained on
+listening tests. For scale, it gives real human recordings 4.41 (a studio speaker) and
+4.25 (audiobook readers), so `ksay` is in their band, which the model cannot tell apart
+from synthetic speech this good. It is not a listener, and with 30 sentences a gap of a
+point or two in word error rate is noise. [What the score means, and what it
+misses](docs/utmos.md).
 
 ### Hear the difference
 
@@ -285,5 +289,6 @@ The logo is original; its wordmark is set in
 The assets are in [`docs/logo`](docs/logo).
 
 The benchmarks use [Whisper](https://github.com/openai/whisper) and
-[UTMOS22 in SpeechMOS](https://github.com/tarepan/SpeechMOS), both MIT, and the Harvard
-sentences. None of them is needed to run `ksay`.
+[UTMOS22 in SpeechMOS](https://github.com/tarepan/SpeechMOS), both MIT, the Harvard
+sentences, and, for scale, clips of two public speech datasets, LJ Speech and LibriTTS-R.
+None of them is needed to run `ksay`.
