@@ -139,21 +139,11 @@ def main() -> int:
             "drawbox=x=80:y=440:w=1120:h=110:color=0x30363d:t=2",
             drawtext(
                 folder,
-                "title",
-                "ksay",
-                MONO,
-                x=80,
-                y=48,
-                fontsize=76,
-                fontcolor="white",
-            ),
-            drawtext(
-                folder,
                 "tag",
                 "Natural text-to-speech for your terminal",
                 SANS,
                 x=80,
-                y=150,
+                y=160,
                 fontsize=30,
                 fontcolor=grey,
             ),
@@ -210,7 +200,8 @@ def main() -> int:
             "[0:a]asplit[a][w];"
             f"[w]showwaves=s=1120x180:mode=cline:rate=30:colors={blue}:scale=lin,"
             "format=rgba,colorkey=black:0.1:0.1[wv];"
-            "[bg][wv]overlay=80:230:shortest=1:format=auto[v0];"
+            "[bg][wv]overlay=80:230:shortest=1:format=auto[v0a];"
+            "[1:v]scale=400:-1[logo];[v0a][logo]overlay=72:20[v0];"
             + ",".join(filters)
             + "[v]"
         )
@@ -218,6 +209,7 @@ def main() -> int:
         target = AUDIO / "intro.mp4"
         subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", mp3]
+            + ["-i", ROOT / "docs" / "logo" / "ksay-logo-dark.png"]
             + [
                 "-filter_complex_script",
                 folder / "graph.txt",

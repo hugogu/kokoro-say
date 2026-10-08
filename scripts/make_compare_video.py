@@ -130,7 +130,8 @@ def main() -> int:
             "[0:a]asplit[a][w];"
             "[w]showwaves=s=1120x140:mode=cline:rate=30:colors=0x58a6ff:scale=lin,"
             "format=rgba,colorkey=black:0.1:0.1[wv];"
-            "[bg][wv]overlay=80:540:shortest=1:format=auto[v0];"
+            "[bg][wv]overlay=80:540:shortest=1:format=auto[v0a];"
+            "[1:v]scale=300:-1[logo];[v0a][logo]overlay=900:36[v0];"
             + ",".join(filters)
             + "[v]"
         )
@@ -145,6 +146,8 @@ def main() -> int:
                 "-y",
                 "-i",
                 folder / "track.wav",
+                "-i",
+                ROOT / "docs" / "logo" / "ksay-logo-dark.png",
             ]
             + [
                 "-filter_complex_script",
