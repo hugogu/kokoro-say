@@ -244,6 +244,26 @@ def test_does_not_run_far_ahead_of_playback():
     assert speak(Output(), synthesize, list("abcdefgh"), ahead=2) == 8
 
 
+def test_stops_synthesizing_once_playback_has_failed():
+    threads, synthesized = [], []
+
+    def synthesize(sentence):
+        threads.append(threading.current_thread())
+        synthesized.append(sentence)
+        return sentence
+
+    class Failing:
+        def write(self, samples):
+            raise OSError("the sound card went away")
+
+    with pytest.raises(OSError, match="sound card"):
+        speak(Failing(), synthesize, list("abcdefghij"))
+    threads[0].join(timeout=2)
+    # a process that goes on speaking cannot keep a thread waiting for room for ever
+    assert not threads[0].is_alive()
+    assert len(synthesized) <= 4  # one in the player's hands, two queued, one held
+
+
 def test_reports_a_synthesis_that_fails():
     def synthesize(sentence):
         raise RuntimeError("the model broke")

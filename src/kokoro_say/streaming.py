@@ -19,6 +19,7 @@ from collections.abc import Callable, Iterable, Iterator
 MINIMUM = 15  # characters; shorter sentences ("Dr.", "Yes.") join the next one
 MAXIMUM = 300  # characters; text with no stop is cut at a space this far in
 IDLE = 1.0  # seconds of silence after which an unfinished sentence is spoken
+TICK = 0.1  # seconds between looks at whether anyone is still waiting for a sentence
 
 BOUNDARY = re.compile(
     r"""
@@ -165,24 +166,42 @@ def speak(
     nothing in it to say. Synthesis runs on its own thread, up to `ahead`
     sentences in front of playback, so sentences join without a gap whenever
     synthesis is quicker than speech. Returns how many sentences were spoken.
+
+    If playback ends early, by an error, the synthesis thread ends too, after the
+    sentence it is on: a thread left waiting for room would be one more for every
+    failure in a process that goes on speaking.
     """
     ready: queue.Queue = queue.Queue(maxsize=ahead)
+    over = threading.Event()  # set when nothing is listening to the producer any more
+
+    def put(item) -> None:
+        while not over.is_set():
+            try:
+                ready.put(item, timeout=TICK)
+                return
+            except queue.Full:
+                pass
 
     def produce() -> None:
         try:
             for sentence in sentences:
+                if over.is_set():
+                    return
                 if (samples := synthesize(sentence)) is not None:
-                    ready.put(samples)
+                    put(samples)
         except BaseException as error:  # reported by the thread that plays
-            ready.put(error)
+            put(error)
         else:
-            ready.put(None)
+            put(None)
 
     threading.Thread(target=produce, daemon=True).start()
     spoken = 0
-    while (item := ready.get()) is not None:
-        if isinstance(item, BaseException):
-            raise item
-        output.write(item)
-        spoken += 1
+    try:
+        while (item := ready.get()) is not None:
+            if isinstance(item, BaseException):
+                raise item
+            output.write(item)
+            spoken += 1
+    finally:
+        over.set()
     return spoken
