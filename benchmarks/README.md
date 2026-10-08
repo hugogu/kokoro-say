@@ -1,18 +1,24 @@
 # Benchmarks
 
 The comparison in the [main README](../README.md): `ksay` against macOS `say` (its
-default voice and Samantha) and eSpeak NG, on speed, memory, disk, intelligibility and
-predicted naturalness. Each number there comes from a report in [`results/`](results/),
-made by the scripts here (the disk sizes were added up by hand).
+default voice and Samantha) and eSpeak NG, on speed, memory, disk, intelligibility,
+predicted naturalness and how soon each speaks text that is still being written. Each
+number there comes from a report in [`results/`](results/), made by the scripts here (the
+disk sizes were added up by hand).
 
 ```sh
-uv run benchmarks/compare.py --wer --samples out/ --json results.json
-uv run benchmarks/mos.py out/
+uv run --python 3.11 benchmarks/compare.py --wer --samples out/ --json results.json
+uv run --python 3.11 benchmarks/mos.py out/
+uv run --python 3.11 benchmarks/live.py --json live.json
+python benchmarks/imports.py ENV-A/bin/python ENV-B/bin/python
 ```
 
 `compare.py` times and measures memory; with `--wer` it also checks intelligibility,
 and with `--samples DIR` it keeps every recording. `mos.py` scores those recordings
-for naturalness. They run on macOS or Linux (`say` is skipped on Linux). The first
+for naturalness. `live.py` feeds sentences to each engine through a pipe at a set pace
+and times the first sound. `imports.py` times the imports that start every `ksay` run
+under the interpreters it is given. They run on macOS or Linux (`say` is skipped on
+Linux). The first
 `--wer` run downloads Whisper `small.en` (about 480 MB) and the first `mos.py` run
 downloads PyTorch and about 400 MB of UTMOS weights; both are cached afterwards.
 
@@ -20,7 +26,8 @@ downloads PyTorch and about 400 MB of UTMOS weights; both are cached afterwards.
 
 | Measure | How it is taken |
 | --- | --- |
-| Time | Wall time of one command, from launch until its file is written, median of six runs (three for the long text) after a warm-up run. It includes start-up, because that is what a script pays. `ksay` is launched as `python -m kokoro_say`. |
+| Time | Wall time of one command, from launch until its file is written, median of six runs (three for the long text) after a warm-up run. It includes start-up, because that is what a script pays, and start-up depends on the Python build, so the report names it and the commands above pin uv's own 3.11, which is what `uv tool install` gives. `ksay` is launched as `python -m kokoro_say`. |
+| First sound | For `live.py`: when the first audio exists, counted from the moment the text starts to be written. `ksay`'s audio device is replaced by a recorder, so the real pipeline runs; `say` writes a file, and the time is when the file first holds audio. |
 | Speed on the long text | Seconds of speech produced per second of wall time. |
 | Memory | Peak resident set size of the command's process, read with `wait4`. For `say` that is the `say` process only. The speech services it calls were each under 20 MB when sampled with Samantha; the default voice runs in a helper process that peaked near 170 MB and one core, which the table leaves out. |
 | Intelligibility | Each engine reads 30 sentences, Whisper transcribes the recordings, and the word error rate is computed after both texts pass through Whisper's English text normalizer. Lower is better. |
@@ -69,6 +76,7 @@ datasets, so that `mos.py DIR` can show where real speech falls on the scale.
 ## Results
 
 - [2026-10-08, MacBook Pro with Apple M2 Max](results/2026-10-08-apple-m2-max.md)
+- [2026-10-08, speech from text that is still being written](results/2026-10-08-live-speech.md)
 - [2026-10-08, UTMOS22 scale and sensitivity](results/2026-10-08-utmos-calibration.md)
 
 To add an engine, give `engines()` in `compare.py` a command that writes a file from

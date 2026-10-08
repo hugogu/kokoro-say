@@ -1,0 +1,157 @@
+{
+  "environment": {
+    "date": "2026-10-08",
+    "system": "macOS 26.7.1",
+    "chip": "Apple M2 Max",
+    "cores": 12,
+    "memory_gb": 64,
+    "python": "3.11.14",
+    "onnxruntime": "1.30.0",
+    "kokoro_onnx": "0.6.1",
+    "ksay_commit": "40d5d31",
+    "whisper_model": "small.en"
+  },
+  "sentences": 10,
+  "scenarios": {
+    "2": {
+      "ksay --stream": [
+        {
+          "first_sound": 1.3460910320281982,
+          "speech_over": 59.89475774765015,
+          "text_finished": 18.053117275238037
+        },
+        {
+          "first_sound": 1.3649559020996094,
+          "speech_over": 59.91362261772156,
+          "text_finished": 18.051528930664062
+        },
+        {
+          "first_sound": 1.4641969203948975,
+          "speech_over": 60.012863636016846,
+          "text_finished": 18.05344271659851
+        }
+      ],
+      "ksay, without --stream": [
+        {
+          "first_sound": 27.65097403526306,
+          "speech_over": 86.47630739212036,
+          "text_finished": 18.059061765670776
+        },
+        {
+          "first_sound": 27.817286014556885,
+          "speech_over": 86.64261937141418,
+          "text_finished": 18.0550320148468
+        },
+        {
+          "first_sound": 27.696362257003784,
+          "speech_over": 86.52169561386108,
+          "text_finished": 18.054660081863403
+        }
+      ],
+      "say (default voice)": [
+        {
+          "first_sound": 18.503090143203735,
+          "speech_over": 71.72467756271362,
+          "text_finished": 18.050929069519043
+        },
+        {
+          "first_sound": 18.533355951309204,
+          "speech_over": 71.75494337081909,
+          "text_finished": 18.047740936279297
+        },
+        {
+          "first_sound": 18.531275033950806,
+          "speech_over": 71.7528624534607,
+          "text_finished": 18.053028106689453
+        }
+      ],
+      "say (Samantha)": [
+        {
+          "first_sound": 18.478267908096313,
+          "speech_over": 72.44978713989258,
+          "text_finished": 18.05544900894165
+        },
+        {
+          "first_sound": 18.44246196746826,
+          "speech_over": 72.41398119926453,
+          "text_finished": 18.052149772644043
+        },
+        {
+          "first_sound": 18.45544409751892,
+          "speech_over": 72.42696332931519,
+          "text_finished": 18.05007791519165
+        }
+      ]
+    },
+    "0": {
+      "ksay --stream": [
+        {
+          "first_sound": 1.3404579162597656,
+          "speech_over": 59.889124631881714,
+          "text_finished": 0.017731189727783203
+        },
+        {
+          "first_sound": 1.4114298820495605,
+          "speech_over": 59.96009659767151,
+          "text_finished": 0.018077850341796875
+        },
+        {
+          "first_sound": 1.3557896614074707,
+          "speech_over": 59.90445637702942,
+          "text_finished": 0.017651796340942383
+        }
+      ],
+      "ksay, without --stream": [
+        {
+          "first_sound": 10.414873123168945,
+          "speech_over": 69.24020648002625,
+          "text_finished": 0.018397092819213867
+        },
+        {
+          "first_sound": 10.235610961914062,
+          "speech_over": 69.06094431877136,
+          "text_finished": 0.017955780029296875
+        },
+        {
+          "first_sound": 10.728907823562622,
+          "speech_over": 69.55424118041992,
+          "text_finished": 0.017880916595458984
+        }
+      ],
+      "say (default voice)": [
+        {
+          "first_sound": 1.1547350883483887,
+          "speech_over": 54.376322507858276,
+          "text_finished": 0.018470048904418945
+        },
+        {
+          "first_sound": 1.1406211853027344,
+          "speech_over": 54.36220860481262,
+          "text_finished": 0.01916813850402832
+        },
+        {
+          "first_sound": 1.1151740550994873,
+          "speech_over": 54.336761474609375,
+          "text_finished": 0.016913175582885742
+        }
+      ],
+      "say (Samantha)": [
+        {
+          "first_sound": 0.83017897605896,
+          "speech_over": 54.801698207855225,
+          "text_finished": 0.018641948699951172
+        },
+        {
+          "first_sound": 0.8319921493530273,
+          "speech_over": 54.80351138114929,
+          "text_finished": 0.018383026123046875
+        },
+        {
+          "first_sound": 0.8201320171356201,
+          "speech_over": 54.791651248931885,
+          "text_finished": 0.020673036575317383
+        }
+      ]
+    }
+  }
+}
