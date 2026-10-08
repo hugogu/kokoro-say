@@ -116,6 +116,13 @@ def test_saves_speech_to_a_file(kokoro, tmp_path, capsys):
     assert f"saved {out} (1.00s)" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("suffix", [".wav", ".flac", ".ogg", ".mp3"])
+def test_saves_every_documented_format(kokoro, tmp_path, suffix):
+    out = tmp_path / f"hello{suffix}"
+    assert cli.main(["Hello there.", "-o", str(out)]) == 0
+    assert sf.info(out).duration == pytest.approx(1.0, abs=0.1)
+
+
 def test_reads_text_from_stdin(kokoro, monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "stdin", io.StringIO("Piped in."))
     assert cli.main(["-", "-o", str(tmp_path / "piped.flac")]) == 0
