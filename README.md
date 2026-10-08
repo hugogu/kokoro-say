@@ -28,11 +28,11 @@ ksay --stream - < chapter.txt                # start speaking before the text is
 
 ## Hear it
 
-▶ **[Listen to ksay introduce itself](docs/audio/intro.mp3)** (35 seconds)
+`ksay` introducing itself, in its own voice: **[download the introduction](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/intro.mp3)**
+(MP3, 35 seconds; GitHub downloads audio files rather than playing them).
 
-The recording is `ksay`'s own voice reading [`docs/audio/intro.txt`](docs/audio/intro.txt),
-with the loudness matched to −16 LUFS. [`scripts/make_audio.py`](scripts/make_audio.py)
-rebuilds it.
+It reads [`docs/audio/intro.txt`](docs/audio/intro.txt), with the loudness matched to
+−16 LUFS. [`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it.
 
 <details>
 <summary>Transcript</summary>
@@ -168,11 +168,11 @@ word error rate is noise.
 
 ### Hear the difference
 
-| Passage | ksay | eSpeak NG |
+| Passage | ksay (MP3) | eSpeak NG (MP3) |
 | --- | --- | --- |
-| The salt breeze came across from the sea. | [▶ ksay](docs/audio/compare/ksay-sea.mp3) | [▶ eSpeak NG](docs/audio/compare/espeak-ng-sea.mp3) |
-| The invoice total is $1,250.50, due on March 3, 2026. | [▶ ksay](docs/audio/compare/ksay-invoice.mp3) | [▶ eSpeak NG](docs/audio/compare/espeak-ng-invoice.mp3) |
-| Two sentences of prose | [▶ ksay](docs/audio/compare/ksay-explainer.mp3) | [▶ eSpeak NG](docs/audio/compare/espeak-ng-explainer.mp3) |
+| The salt breeze came across from the sea. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-sea.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-sea.mp3) |
+| The invoice total is $1,250.50, due on March 3, 2026. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-invoice.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-invoice.mp3) |
+| Two sentences of prose | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-explainer.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-explainer.mp3) |
 
 All clips are at the same loudness. Apple's licence does not allow publishing
 recordings of its system voices, so there is no `say` clip here. On a Mac, hear it
@@ -246,8 +246,9 @@ uv run ruff check && uv run ruff format --check
 
 CI runs the same on Linux, macOS and Windows. [`AGENTS.md`](AGENTS.md) records what was
 learned the hard way, and is meant for people and coding agents alike. The recordings
-in `docs/audio` are rebuilt with `scripts/make_audio.py`; the numbers in
-[Comparison](#how-it-compares) with `benchmarks/compare.py`.
+in `docs/audio` are rebuilt with `scripts/make_audio.py`, the two videos made from them
+with `scripts/make_intro_video.py` and `scripts/make_compare_video.py`; the numbers in
+[Comparison](#how-it-compares) come from `benchmarks/compare.py`.
 
 ## Related tools
 

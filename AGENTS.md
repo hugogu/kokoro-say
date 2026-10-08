@@ -35,9 +35,12 @@
   allows system voices for personal, non-commercial use and rules out recording,
   publishing or redistributing them, even non-profit. Measuring `say` locally and
   publishing the numbers is fine.
-- GitHub removes `<audio>` and `<video>` from a README, so a clip can only be linked,
-  or played inline as a video uploaded through GitHub's own editor. `docs/audio/intro.mp4`
-  is rendered for that upload and is not committed.
+- GitHub removes `<audio>` and `<video>` from a README. Its file page for an MP3 has no
+  player, and the raw file is served with `content-disposition: attachment`, so a link
+  to a clip downloads it. The only inline player is for a video uploaded through
+  GitHub's own editor (there is no API for that; drag the file into a comment box and
+  put the URL it returns on a line of its own). `docs/audio/intro.mp4` and
+  `compare.mp4` are rendered for that upload and are not committed.
 - Before pushing, run `uv run ruff check`, `uv run ruff format --check` and
   `uv run pytest`. CI runs them on Linux, macOS and Windows, each with the oldest
   and newest supported Python.
