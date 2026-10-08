@@ -12,3 +12,4 @@ build/
 
 # Rendered by scripts/make_intro_video.py; GitHub hosts the uploaded copy
 docs/audio/intro.mp4
+docs/audio/compare.mp4
