@@ -45,20 +45,26 @@
   Homebrew's 3.12 and 0.70 s on Homebrew's 3.14 (`benchmarks/imports.py`), and a bare
   interpreter 13, 21 and 54 ms. State the interpreter in every timing report and use the
   one that `uv tool install` gives, uv's own: `uv run --python 3.11 benchmarks/...`.
-- eSpeak NG is the wrong front end for Chinese, and so for Chinese mixed with English. For
-  'cmn' it emits tone digits that Kokoro's vocabulary lacks, so the filter leaves toneless
-  IPA, and it drops full-width punctuation. It wraps English words in `(en)...(cmn)` flags
-  that survive the filter as phonemes, and an English voice reads each character as
-  "Chinese letter". Kokoro's own front end is `misaki` (`pip install 'misaki[zh]'`, about
-  16 MB, no spaCy): `ZHG2P()` with no version is what the v1.0 voices were trained on
-  (version '1.1' is for the separate v1.1-zh model), and its output goes to
-  `kokoro.create(..., is_phonemes=True)` with tone arrows intact. Its legacy path leaves
-  English untouched; English phonemized with `misaki.espeak.EspeakG2P` and spoken by a
-  Chinese voice is hard to follow (an English recognizer caught 0 or 1 of 4 test words),
-  while an English voice for the English words caught all 4. `say`'s Chinese voices
-  caught 0 to 3 of 4, and one of them, Tingting (Enhanced), is installed on the test Mac.
-  Run a recognizer at temperature 0 for checks like this: with sampling the same file
-  scored 4 of 4 once and 0 of 4 the next time.
+- Chinese goes through `misaki` (`chinese.py`), not eSpeak NG, when the `zh` extra is
+  installed. For 'cmn' eSpeak emits tone digits that Kokoro's vocabulary lacks, so the
+  filter leaves toneless IPA, it drops full-width punctuation, and it wraps English words
+  in `(en)...(cmn)` flags that survive the filter as phonemes. misaki's `ZHG2P()` with no
+  version is what the v1.0 voices were trained on (version '1.1' belongs to the separate
+  v1.1-zh model); its phonemes go to `kokoro.create(..., is_phonemes=True)` with the tones
+  as arrows. English segments go through `misaki.espeak.EspeakG2P`, spoken by the Chinese
+  voice, which a native listener preferred to an English voice for the English words; an
+  English recognizer, by contrast, caught only 0 or 1 of 4 test words that way against 4
+  of 4 with an English voice, so such a recognizer is the wrong judge of code-switching.
+  Run any recognizer at temperature 0: with sampling the same file scored 4 of 4 once and
+  0 of 4 the next time. `say`'s Chinese voices caught 0 to 3 of 4.
+- The extra is optional because misaki declares `Requires-Python <3.13` (0.9.4, from
+  April 2025, is its latest release) and its dependencies weigh about 100 MB installed
+  (pypinyin-dict 43 MB, jieba 37 MB, misaki 14 MB). `uv run` does not remove packages it
+  no longer needs, so use `uv sync` to test without the extra. misaki's `EspeakG2P`
+  starts eSpeak from `espeakng_loader`'s own path, which kills the process when that path
+  is over 150 characters, so `chinese.front_ends()` must run after `load_kokoro`, which
+  shortens it. The pause after a sentence is read from the phonemes, because the
+  Chinese full stop is not one of the marks kokoro-onnx pauses on.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with

@@ -74,6 +74,9 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
   predicted naturalness: level with the default voice of macOS `say` (4.4) and with clean
   human recordings (4.3 to 4.4), ahead of the classic Samantha voice (4.0) and far ahead
   of eSpeak NG (2.2).
+- **Chinese, and Chinese mixed with English.** With the optional `zh` extra the Chinese
+  voices keep their tones and speak English words inside a Chinese sentence
+  ([how](#chinese)).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
 - **Speaks while you write.** `--stream` speaks each sentence as it arrives, so the
@@ -96,7 +99,8 @@ uv tool install git+https://github.com/hugogu/kokoro-say
 
 or `pipx install git+https://github.com/hugogu/kokoro-say`. It needs Python 3.11 or
 later and installs the command `ksay`. To update, run the same command again with
-`uv tool install --force`; to remove it, `uv tool uninstall kokoro-say`.
+`uv tool install --force`; to remove it, `uv tool uninstall kokoro-say`. For Chinese,
+add the `zh` extra: see [Chinese](#chinese).
 
 On Linux, playing sound needs PortAudio: `sudo apt install libportaudio2` on Debian
 and Ubuntu. Saving to a file does not.
@@ -147,12 +151,8 @@ A voice's first letter is its language and the second is `f` or `m`:
 | Mandarin Chinese | 8 | `zf_xiaobei`, `zm_yunxi` |
 
 The English voices sound best. kokoro-onnx turns text into sounds with eSpeak NG, which
-is weaker for Japanese than Kokoro's own `misaki` and does not suit Chinese. Its Chinese
-output has no tones (Kokoro's vocabulary has no place for eSpeak's tone marks) and no
-punctuation. An English word inside Chinese text arrives wrapped in language-switch
-markers that reach the model as phonemes, and an English voice names every Chinese
-character "Chinese letter". `misaki` keeps the tones, and `ksay` does not use it yet, so
-Chinese, and Chinese mixed with English, are not supported well.
+is weaker for Japanese than Kokoro's own front end, `misaki`. For Chinese, see
+[Chinese](#chinese).
 
 Speech plays through PortAudio. It starts once the whole text has been read and
 generated, or sooner with `--stream`: the text is cut into sentences, each is spoken as
@@ -165,6 +165,29 @@ written:
 # a sentence every two seconds; ksay speaks each one as it arrives
 for s in "This is the first sentence." "Here is the second one."; do echo "$s"; sleep 2; done | ksay --stream
 ```
+
+### Chinese
+
+eSpeak NG does not suit Mandarin. Its tone marks are not in Kokoro's vocabulary, so the
+voice speaks without tones. Chinese punctuation is lost, an English word inside Chinese
+text arrives wrapped in language-switch markers that reach the model as phonemes, and an
+English voice reads every character as "Chinese letter".
+
+The optional `zh` extra installs `misaki`, the front end the Chinese voices were trained
+with, and `ksay` then gives the Chinese voices (`zf_*`, `zm_*`) its phonemes instead. The
+tones are kept, Chinese punctuation pauses the voice, numbers are spoken in Chinese, and
+English words in a Chinese sentence are spoken by the same voice, with an accent:
+
+```sh
+uv tool install --force --python 3.12 'kokoro-say[zh] @ git+https://github.com/hugogu/kokoro-say'
+ksay -v zf_xiaobei "今天我们来讨论一下 machine learning 的应用。"
+```
+
+The extra adds about 100 MB, and about 0.9 seconds to the start-up of a Chinese run. It
+needs Python 3.12 or older, because that is all `misaki` supports. Without it `ksay` says
+so and falls back to eSpeak NG. Chinese text given to an English voice, which is the
+default, gets a hint to use a Chinese one. The result has been judged by ear, not
+measured against `say`'s Chinese voices.
 
 ## How it compares
 
@@ -318,6 +341,8 @@ with a 512-frame buffer.
   `sudo apt install libportaudio2`.
 - **`cannot open the audio output`** on a server or in a container: there is no sound
   card. Save to a file with `-o`.
+- **`Chinese tones need Kokoro's own front end`**: the `zh` extra is not installed, or
+  Python is 3.13 or newer, which `misaki` does not support. See [Chinese](#chinese).
 - **Every run starts slowly**: the Python build matters. Importing `ksay`'s libraries took
   0.3 s on uv's own Python 3.11 and 0.7 s on Homebrew's 3.14. Install with
   `uv tool install --force --python 3.11 git+https://github.com/hugogu/kokoro-say` to use
@@ -363,6 +388,9 @@ with `scripts/make_intro_video.py` and `scripts/make_compare_video.py`; the numb
   thewh1teagle, MIT.
 - [eSpeak NG](https://github.com/espeak-ng/espeak-ng), GPL-3.0, which kokoro-onnx
   installs as a dependency; it is not part of this repository.
+- [misaki](https://github.com/hexgrad/misaki) by hexgrad, Apache-2.0, Kokoro's own front
+  end for Chinese, which the optional `zh` extra installs with jieba, pypinyin and cn2an
+  (MIT).
 
 The logo is original; its wordmark is set in
 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (SIL OFL 1.1), as outlines.
