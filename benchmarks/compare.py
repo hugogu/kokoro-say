@@ -272,11 +272,15 @@ def environment() -> dict:
         system = f"macOS {platform.mac_ver()[0]}"
     else:
         chip, system = platform.processor() or platform.machine(), platform.platform()
-    commit = subprocess.run(
-        ["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):  # no git, or not a checkout
+        commit = "unknown"
     return {
         "date": time.strftime("%Y-%m-%d"),
         "system": system,
