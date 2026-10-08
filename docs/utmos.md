@@ -10,8 +10,9 @@ and, most important, how far to trust it.
 
 - It estimates how natural a recording sounds, on the 1 (bad) to 5 (excellent) scale of
   a listening test, with no listeners and no reference recording.
-- On this scale `ksay` scores 4.47, real human recordings 4.25 to 4.41, macOS `say` 4.00
-  and eSpeak NG 2.18. Noise-only audio scores 1.43.
+- On this scale `ksay` scores 4.47, the default voice of macOS `say` 4.43, real human
+  recordings 4.25 to 4.41, `say -v Samantha` 4.00 and eSpeak NG 2.18. Noise-only audio
+  scores 1.43.
 - It does not separate a very good synthetic voice from a human one: the top of the
   scale is crowded, and a gap of a few hundredths means nothing.
 - It is a prediction, not a listening test. Use it to rank voices that differ a lot, and
@@ -124,16 +125,18 @@ restoration (LibriTTS-R). Fetch them with `benchmarks/fetch_human_reference.py`.
 | Recordings | predicted MOS | clips |
 | --- | ---: | ---: |
 | ksay | 4.47 ± 0.05 | 30 |
+| macOS `say`, default voice | 4.43 ± 0.08 | 30 |
 | Human, studio speaker | 4.41 ± 0.06 | 12 |
 | Human, audiobook readers | 4.25 ± 0.09 | 12 |
 | macOS `say`, Samantha | 4.00 ± 0.18 | 30 |
 | eSpeak NG | 2.18 ± 0.23 | 30 |
 | White noise, no speech | 1.43 ± 0.11 | 10 |
 
-`ksay` sits where clean human recordings sit, and 0.06 above the studio speaker is a tie
-within the spread of the clips, not a sign that it sounds better than a person. The scale
-cannot rank voices that good against each other; it can only say that both are far from
-the audibly artificial ones.
+`ksay` and the default `say` voice sit where clean human recordings sit, and 0.06 above
+the studio speaker is a tie within the spread of the clips, not a sign that `ksay` sounds
+better than a person. The scale cannot rank voices that good against each other; it can
+only say that all of them are far from the audibly artificial ones. The 0.04 between
+`ksay` and the default `say` voice is inside the clips' own spread too.
 
 **What changes a score.** Ten `ksay` recordings, damaged in one way at a time with
 `benchmarks/mos_probe.py`, and scored again.
@@ -162,8 +165,8 @@ mediocre audio.
   nothing in its input says what was meant to be spoken. The README pairs it with a
   Whisper word error rate for that reason.
 - **Differences near the top.** It was trained to rank the systems of earlier challenges.
-  In the measurements here, Kokoro and human recordings land within a few tenths of each
-  other.
+  In the measurements here, Kokoro, the default `say` voice and human recordings land
+  within a few tenths of each other.
 - **Anything outside its training.** The ratings are English, from one listening test. The
   challenge's out-of-domain track, Chinese speech from a different test, needed extra
   labelled data to work well, and Kokoro also speaks Japanese, Spanish and more. Every

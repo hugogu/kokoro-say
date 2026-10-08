@@ -62,15 +62,16 @@ to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Pr
 
 - **Natural voices.** Kokoro-82M is a neural model with 54 voices in 8 languages. In
   the [comparison](#how-it-compares) below it scores 4.5 out of 5 on predicted
-  naturalness, against 4.0 for macOS `say` and 2.2 for eSpeak NG, and about where the same
-  model puts clean human recordings (4.3 to 4.4).
+  naturalness: level with the default voice of macOS `say` (4.4) and with clean human
+  recordings (4.3 to 4.4), ahead of the classic Samantha voice (4.0) and far ahead of
+  eSpeak NG (2.2).
 - **Private and offline.** Nothing you read leaves your computer, and there is
   nothing to sign up for.
 - **Familiar.** `ksay "text"`, `-o file`, standard input, `-v voice`, `-s speed`.
 - **Quick to start talking.** A second or two to the first word on an M2 Max, and
   `--stream` begins speaking a long text before it has been generated.
 - **Fast enough.** About six times faster than real time on an M2 Max CPU: a 90-second
-  passage in 15 seconds.
+  passage in about 16 seconds.
 - **Everywhere.** macOS (Apple silicon), Linux and Windows, tested in CI with the real
   model.
 
@@ -141,40 +142,52 @@ nothing from it.
 
 ## How it compares
 
-`ksay` against macOS `say` (the Samantha voice, which is what plain `say` uses) and
-eSpeak NG, a classic formant synthesizer. Measured on an Apple M2 Max with 64 GB, in
-ordinary desktop use, on 2026-10-08. The full report, with every mistake, is in
+`ksay` against macOS `say` and eSpeak NG, a classic formant synthesizer. `say` is
+measured twice, because its two usual voices are very different: plain `say` speaks with
+the voice selected in the Mac's settings, which on the test Mac is a modern voice
+rendered by a helper process, and `say -v Samantha` asks for the classic compact voice.
+Measured on an Apple M2 Max with 64 GB, in ordinary desktop use, on 2026-10-08. The full
+report, with every mistake, is in
 [`benchmarks/results`](benchmarks/results/2026-10-08-apple-m2-max.md), and
 [`benchmarks/`](benchmarks/) holds the scripts to repeat it.
 
 ### Speed, memory and size
 
-| | ksay | say | eSpeak NG |
-| --- | ---: | ---: | ---: |
-| A six-word sentence, to a file | 1.7 s | 0.8 s | 0.4 s |
-| 63 words, 22 seconds of speech | 4.4 s | 0.9 s | 0.4 s |
-| 268 words, 91 seconds of speech | 14.9 s | 1.2 s | 0.4 s |
-| Speed on the long text | 6× real time | 70× | 195× |
-| Peak memory | 0.6 to 1.0 GB | 36 MB | 46 to 68 MB |
-| Disk | 0.5 GB | built into macOS | 21 MB |
+| | ksay | say (default voice) | say -v Samantha | eSpeak NG |
+| --- | ---: | ---: | ---: | ---: |
+| A six-word sentence, to a file | 1.5 s | 1.3 s | 0.8 s | 0.4 s |
+| 63 words, 22 seconds of speech | 4.7 s | 3.7 s | 0.9 s | 0.4 s |
+| 268 words, 91 seconds of speech | 15.9 s | 11.9 s | 1.2 s | 0.4 s |
+| Speed on the long text | 6× real time | 7× | 69× | 202× |
+| Peak memory | 0.6 to 1.0 GB | 37 MB, plus a helper | 36 MB | 46 to 68 MB |
+| Disk | 0.5 GB | built into macOS | built into macOS | 20 MB |
 
-Times include starting the program. `ksay` needs a 354 MB model and 134 MB of packages.
+Times include starting the program. `ksay` needs a 354 MB model and 132 MB of packages.
+The helper process that renders the default voice peaked near 170 MB and one core; the
+memory row counts the `say` process only.
 
 ### Quality
 
-| | ksay | say | eSpeak NG |
-| --- | ---: | ---: | ---: |
-| Predicted naturalness (UTMOS22, 1 to 5) | **4.47** | 4.00 | 2.18 |
-| Word error rate, 20 plain sentences | **0.6%** | 2.5% | 15.5% |
-| Word error rate, 10 with numbers, dates and names | **0.0%** | **0.0%** | 4.5% |
+| | ksay | say (default voice) | say -v Samantha | eSpeak NG |
+| --- | ---: | ---: | ---: | ---: |
+| Predicted naturalness (UTMOS22, 1 to 5) | **4.47** | **4.43** | 4.00 | 2.18 |
+| Word error rate, 20 plain sentences | **0.6%** | **0.6%** | 2.5% | 15.5% |
+| Word error rate, 10 with numbers, dates and names | **0.0%** | **0.0%** | **0.0%** | 4.5% |
 
 Word error rate is how often Whisper transcribed the recording wrongly; lower is better.
 Predicted naturalness comes from [UTMOS22](docs/utmos.md), a neural model trained on
 listening tests. For scale, it gives real human recordings 4.41 (a studio speaker) and
-4.25 (audiobook readers), so `ksay` is in their band, which the model cannot tell apart
-from synthetic speech this good. It is not a listener, and with 30 sentences a gap of a
-point or two in word error rate is noise. [What the score means, and what it
-misses](docs/utmos.md).
+4.25 (audiobook readers), so `ksay` and the default `say` voice are both in their band,
+which the model cannot tell apart from synthetic speech this good. It is not a
+listener, and with 30 sentences a gap of a point or two in word error rate is noise.
+[What the score means, and what it misses](docs/utmos.md).
+
+On a Mac, then, `ksay` and plain `say` come out level: the same predicted naturalness and
+the same word error rate on plain speech, with `say` somewhat quicker and far lighter.
+Samantha is the quickest of the three to speak, but it scores about 0.4 lower on predicted
+naturalness and had four of the twenty plain sentences transcribed inexactly, against
+one each for the other two. What `ksay` adds is not a better voice than the best one on
+a Mac; it is that quality on every other system as well, offline.
 
 ### Hear the difference
 
@@ -187,6 +200,7 @@ clip here; on a Mac, hear it yourself:
 ```sh
 ksay "The salt breeze came across from the sea."
 say  "The salt breeze came across from the sea."
+say -v Samantha "The salt breeze came across from the sea."
 ```
 
 <details>
@@ -202,16 +216,19 @@ say  "The salt breeze came across from the sea."
 
 ### Which to use
 
-- **ksay** when people will listen: narration, articles and books, accessibility,
-  voice-overs, anything where a robotic voice is a distraction. It pays a second or
-  two of start-up and up to a gigabyte of memory while it speaks.
-- **say** for instant, tiny, built-in spoken alerts on a Mac, such as "build finished".
-  It is the fastest to start and is already there.
+- **ksay** when the machine is not a Mac, when a script must sound the same on every
+  system, or when the audio will be published: Apple's licence does not allow
+  recordings of its voices to be shared, and Kokoro's licence, Apache-2.0, sets no such
+  limit. On a Mac it costs a second or two of start-up and up to a gigabyte of memory.
+- **say** on a Mac, when the speech is only for you. It is already there, starts
+  quickest, uses little memory, and its default voice is as natural as `ksay`'s.
+  `say -v Samantha` answers in under a second, which suits spoken alerts such as "build
+  finished".
 - **eSpeak NG** when the footprint matters more than the voice: a small device, many
   languages, or text that must be spoken at once.
 
-Not compared: Apple's downloadable Enhanced and Premium voices, which sound better than
-Samantha; Windows' built-in voices; other neural engines such as Piper; cloud services.
+Not compared: Apple's downloadable Enhanced and Premium voices (none was installed);
+Windows' built-in voices; other neural engines such as Piper; cloud services.
 
 ## Platforms
 
