@@ -301,6 +301,17 @@ def test_streams_chinese_sentence_by_sentence(kokoro, misaki, output, monkeypatc
     assert [len(block) for block in output.written] == [24_000, 24_000 + 6_000]
 
 
+def test_says_so_when_nothing_in_the_text_can_be_spoken(
+    kokoro, output, tmp_path, capsys
+):
+    kokoro.unspeakable = "---"
+    assert cli.main(["-o", str(tmp_path / "none.wav"), "--", "---"]) == 1
+    assert capsys.readouterr().err == "ksay: there is nothing to say in that text\n"
+    assert cli.main(["--", "---"]) == 1  # played, not saved
+    assert capsys.readouterr().err == "ksay: there is nothing to say in that text\n"
+    assert output.calls == ["start", "close"]  # the device was released all the same
+
+
 def test_streaming_skips_what_cannot_be_said(kokoro, output):
     kokoro.unspeakable = "***"
     text = "The first sentence is here.\n\n***\n\nThe last sentence is here."

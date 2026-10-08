@@ -87,6 +87,14 @@ def to_kokoro(text: str, lang: str) -> tuple[str, bool]:
     return text, False
 
 
+def create(kokoro, spoken: str, phonemes: bool, **options):
+    """Kokoro's samples and sample rate, or a RuntimeError saying why there are none."""
+    try:
+        return kokoro.create(spoken, is_phonemes=phonemes, **options)
+    except ValueError as error:  # it found no phonemes in the text
+        raise RuntimeError("there is nothing to say in that text") from error
+
+
 def language_notes(text: str, lang: str, voice: str) -> list[str]:
     """Warnings for text that the chosen voice will not speak well."""
     if lang == "cmn" and not chinese.available():
@@ -445,12 +453,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.output:
             import soundfile as sf
 
-            samples, rate = kokoro.create(spoken, is_phonemes=phonemes, **options)
+            samples, rate = create(kokoro, spoken, phonemes, **options)
             sf.write(args.output, samples, rate)
             print(f"saved {args.output} ({len(samples) / rate:.2f}s)", file=sys.stderr)
             return 0
         with speaker() as output:
-            samples, _ = kokoro.create(spoken, is_phonemes=phonemes, **options)
+            samples, _ = create(kokoro, spoken, phonemes, **options)
             output.write(samples)
     except (OSError, RuntimeError) as error:
         print(f"ksay: {error}", file=sys.stderr)
