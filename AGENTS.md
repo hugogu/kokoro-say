@@ -40,10 +40,19 @@
   publishing the numbers is fine.
 - GitHub removes `<audio>` and `<video>` from a README. Its file page for an MP3 has no
   player, and the raw file is served with `content-disposition: attachment`, so a link
-  to a clip downloads it. The only inline player is for a video uploaded through
-  GitHub's own editor (there is no API for that; drag the file into a comment box and
-  put the URL it returns on a line of its own). `docs/audio/intro.mp4` and
-  `compare.mp4` are rendered for that upload and are not committed.
+  to a clip downloads it. The only inline player is a bare
+  `https://github.com/user-attachments/assets/<uuid>` line: an MP4 uploaded through
+  GitHub's own editor, for which there is no API. `docs/audio/intro.mp4` and
+  `compare.mp4` are rendered for that and not committed; the two URLs in the README
+  belong to the videos rendered on 2026-10-08, so re-rendering means uploading again.
+  With a logged-in browser the upload needs no submitted issue: open `/issues/new`,
+  patch `HTMLInputElement.prototype.click` so that the file input GitHub creates when
+  "Add Files" is pressed is attached to the page instead of opening a native dialog,
+  press the button, give that input the file with the browser tool's file upload (it
+  reads only the session's own folders, so copy the video into the scratchpad first),
+  read the URL from the textarea, clear it and close the tab. Visitors load a signed
+  `private-user-images` URL that GitHub makes when it renders the README; a plain
+  request to the `user-attachments` URL answers 404, which does not matter.
 - Before pushing, run `uv run ruff check`, `uv run ruff format --check` and
   `uv run pytest`. CI runs them on Linux, macOS and Windows, each with the oldest
   and newest supported Python.

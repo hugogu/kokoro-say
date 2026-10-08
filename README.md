@@ -33,11 +33,12 @@ ksay --stream - < chapter.txt                # start speaking before the text is
 
 ## Hear it
 
-`ksay` introducing itself, in its own voice: **[download the introduction](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/intro.mp3)**
-(MP3, 35 seconds; GitHub downloads audio files rather than playing them).
+https://github.com/user-attachments/assets/009fa92e-1835-455f-a6a4-e4e62cd645ec
 
-It reads [`docs/audio/intro.txt`](docs/audio/intro.txt), with the loudness matched to
-−16 LUFS. [`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it.
+Press play: `ksay` introduces itself in its own voice, with the commands it mentions on
+screen. It reads [`docs/audio/intro.txt`](docs/audio/intro.txt), with the loudness matched
+to −16 LUFS ([`scripts/make_audio.py`](scripts/make_audio.py) rebuilds it). Prefer a file?
+[Download the MP3](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/intro.mp3).
 
 <details>
 <summary>Transcript</summary>
@@ -173,20 +174,27 @@ word error rate is noise.
 
 ### Hear the difference
 
-| Passage | ksay (MP3) | eSpeak NG (MP3) |
-| --- | --- | --- |
-| The salt breeze came across from the sea. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-sea.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-sea.mp3) |
-| The invoice total is $1,250.50, due on March 3, 2026. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-invoice.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-invoice.mp3) |
-| Two sentences of prose | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-explainer.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-explainer.mp3) |
+https://github.com/user-attachments/assets/ffcdcc73-f221-4810-930f-c2e352e40f19
 
-All clips are at the same loudness. Apple's licence does not allow publishing
-recordings of its system voices, so there is no `say` clip here. On a Mac, hear it
-yourself:
+Press play: `ksay` reads each passage, then eSpeak NG, at the same loudness. Apple's
+licence does not allow publishing recordings of its system voices, so there is no `say`
+clip here; on a Mac, hear it yourself:
 
 ```sh
 ksay "The salt breeze came across from the sea."
 say  "The salt breeze came across from the sea."
 ```
+
+<details>
+<summary>The clips as MP3 files</summary>
+
+| Passage | ksay | eSpeak NG |
+| --- | --- | --- |
+| The salt breeze came across from the sea. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-sea.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-sea.mp3) |
+| The invoice total is $1,250.50, due on March 3, 2026. | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-invoice.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-invoice.mp3) |
+| Two sentences of prose | [ksay](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/ksay-explainer.mp3) | [eSpeak NG](https://github.com/hugogu/kokoro-say/raw/main/docs/audio/compare/espeak-ng-explainer.mp3) |
+
+</details>
 
 ### Which to use
 
