@@ -230,9 +230,14 @@ def performance_cores() -> int | None:
     """
     if platform.system() != "Darwin":
         return None
-    result = subprocess.run(
-        ["sysctl", "-n", "hw.perflevel0.physicalcpu"], capture_output=True, text=True
-    )
+    try:  # by its whole name: a PATH without /usr/sbin, or none, does not find it
+        result = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "hw.perflevel0.physicalcpu"],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # this only chooses the cores, so it is no reason to fail
+        return None
     count = result.stdout.strip()
     return int(count) if result.returncode == 0 and count.isdigit() else None
 

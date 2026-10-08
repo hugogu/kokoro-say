@@ -623,6 +623,30 @@ def test_onnxruntime_is_told_not_to_call_home_before_it_is_imported(monkeypatch)
     assert seen == ["1"]
 
 
+def test_runs_without_sysctl_where_the_path_has_none(monkeypatch):
+    # A launchd job, cron or a client that passes no PATH finds /usr/sbin/sysctl
+    # nowhere. Speaking is not worth failing over: it only chooses the cores.
+    def missing(command, **options):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.subprocess, "run", missing)
+    assert cli.performance_cores() is None
+
+
+def test_asks_sysctl_by_its_whole_name(monkeypatch):
+    asked = []
+
+    def sysctl(command, **options):
+        asked.append(command[0])
+        return subprocess.CompletedProcess(command, 0, stdout="8\n")
+
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cli.subprocess, "run", sysctl)
+    assert cli.performance_cores() == 8
+    assert asked == ["/usr/sbin/sysctl"]  # a PATH without /usr/sbin does not matter
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra rights")
 def test_shortens_a_long_espeak_data_path(monkeypatch, tmp_path):
     import espeakng_loader
