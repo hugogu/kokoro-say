@@ -66,9 +66,9 @@ and no listening test of those has been run here.
 
 ```text
 recording ─► wav2vec 2.0 ─► one vector for every 20 ms of speech
-          ─► joined with a fixed "average listener" vector and a fixed "data domain" vector
-          ─► bidirectional LSTM ─► small network ─► one score per 20 ms
-          ─► the mean of those scores ─► × 2 + 3 ─► predicted MOS, 1 to 5
+          ─► + fixed "average listener" and "data domain" vectors
+          ─► bidirectional LSTM ─► small network ─► a score per 20 ms
+          ─► mean of the scores ─► × 2 + 3 ─► predicted MOS, 1 to 5
 ```
 
 - **wav2vec 2.0** ([Baevski et al., 2020](https://arxiv.org/abs/2006.11477)) learned the
