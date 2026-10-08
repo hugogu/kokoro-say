@@ -273,13 +273,50 @@ def stream(output, parts: AsyncIterable) -> None:
     asyncio.run(play())
 
 
+def stdin_is_terminal() -> bool:
+    """Whether nothing is piped in, so reading stdin would wait for a person."""
+    return sys.stdin is None or sys.stdin.isatty()
+
+
+def read_text(text: str | None, input_file: str | None) -> str:
+    """The text to speak: the argument, a file, or stdin.
+
+    Stdin is read for `-`, for `-f -`, and when neither an argument nor a file
+    is given, the way `say` does.
+    """
+    source = text if input_file is None else input_file
+    if source is None or source == "-":
+        return sys.stdin.read()
+    if input_file is None:
+        return source
+    try:
+        # utf-8-sig, so a byte order mark from a Windows editor is not spoken
+        return Path(input_file).expanduser().read_text(encoding="utf-8-sig")
+    except OSError as error:
+        raise RuntimeError(
+            f"cannot read {input_file}: {error.strerror or error}"
+        ) from error
+    except UnicodeDecodeError as error:
+        raise RuntimeError(f"{input_file} is not UTF-8 text") from error
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ksay",
         description="Speak or save text with the Kokoro-82M voices.",
         epilog="Example: ksay -v bf_emma 'Hello there.' -o hello.wav",
     )
-    parser.add_argument("text", nargs="?", help="text to speak, or - to read stdin")
+    parser.add_argument(
+        "text",
+        nargs="?",
+        help="text to speak; - reads stdin, and so does no text when input is piped",
+    )
+    parser.add_argument(
+        "-f",
+        "--input-file",
+        metavar="FILE",
+        help="read the text from FILE instead; - reads stdin",
+    )
     destination = parser.add_mutually_exclusive_group()
     destination.add_argument(
         "-o", "--output", help="save to this file (.wav, .flac or .ogg) instead"
@@ -315,20 +352,25 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.text is None and not (args.list_voices or args.voice == "?"):
-        parser.error("give the text to speak, or - to read it from stdin")
+    listing = args.list_voices or args.voice == "?"
+    if args.text is not None and args.input_file is not None:
+        parser.error("give the text or -f FILE, not both")
+    if not listing and args.text is None and args.input_file is None:
+        if stdin_is_terminal():
+            parser.error("give the text to speak, or -f FILE, or pipe it in")
     if not 0.5 <= args.speed <= 2.0:
         parser.error("speed must be between 0.5 and 2.0")
 
     try:
+        # Read before loading the model, so a missing file fails at once
+        text = None if listing else read_text(args.text, args.input_file)
         kokoro = load_kokoro(ensure_model(model_dir(args.model_dir)))
         voices = sorted(kokoro.get_voices())
-        if args.list_voices or args.voice == "?":
+        if listing:
             print("\n".join(voices))
             return 0
         if args.voice not in voices:
             parser.error(f"unknown voice {args.voice!r}; list them with: ksay -v '?'")
-        text = sys.stdin.read() if args.text == "-" else args.text
         if not text.strip():
             parser.error("there is no text to speak")
         lang = args.lang or language_for(args.voice)

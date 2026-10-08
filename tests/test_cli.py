@@ -43,6 +43,13 @@ class FakeKokoro:
             yield part, 24_000
 
 
+class Terminal(io.StringIO):
+    """Standard input as a person at a keyboard has it."""
+
+    def isatty(self):
+        return True
+
+
 class FakeOutput:
     def __init__(self):
         self.calls = []
@@ -129,6 +136,71 @@ def test_reads_text_from_stdin(kokoro, monkeypatch, tmp_path):
     assert kokoro.calls[0][0] == "Piped in."
 
 
+def test_reads_piped_stdin_when_no_text_is_given(kokoro, monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Piped in."))
+    assert cli.main(["-o", str(tmp_path / "piped.flac")]) == 0
+    assert kokoro.calls[0][0] == "Piped in."
+
+
+@pytest.mark.parametrize("flag", ["-f", "--input-file"])
+def test_reads_text_from_a_file(kokoro, tmp_path, flag):
+    source = tmp_path / "chapter.txt"
+    source.write_text("Once upon a time.\nThe end.\n", encoding="utf-8")
+    assert cli.main([flag, str(source), "-o", str(tmp_path / "out.wav")]) == 0
+    assert kokoro.calls[0][0] == "Once upon a time.\nThe end.\n"
+
+
+def test_reads_non_ascii_text_from_a_file(kokoro, tmp_path):
+    source = tmp_path / "chinese.txt"
+    source.write_text("你好，世界。", encoding="utf-8")
+    assert cli.main(["-f", str(source), "-o", str(tmp_path / "out.wav")]) == 0
+    assert kokoro.calls[0][0] == "你好，世界。"
+
+
+def test_reads_stdin_for_a_dash_file(kokoro, monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "stdin", io.StringIO("From stdin."))
+    assert cli.main(["-f", "-", "-o", str(tmp_path / "out.wav")]) == 0
+    assert kokoro.calls[0][0] == "From stdin."
+
+
+def test_does_not_speak_a_byte_order_mark(kokoro, tmp_path):
+    source = tmp_path / "bom.txt"
+    source.write_bytes(b"\xef\xbb\xbfHello.")
+    assert cli.main(["-f", str(source), "-o", str(tmp_path / "out.wav")]) == 0
+    assert kokoro.calls[0][0] == "Hello."
+
+
+def test_reports_a_file_it_cannot_read(kokoro, tmp_path, capsys):
+    missing = tmp_path / "missing.txt"
+    assert cli.main(["-f", str(missing)]) == 1
+    assert capsys.readouterr().err.startswith(f"ksay: cannot read {missing}: ")
+    assert kokoro.calls == []  # it failed before the model was even used
+
+
+def test_reports_a_file_that_is_not_utf8(kokoro, tmp_path, capsys):
+    source = tmp_path / "latin1.txt"
+    source.write_bytes("café".encode("latin-1"))
+    assert cli.main(["-f", str(source)]) == 1
+    assert capsys.readouterr().err == f"ksay: {source} is not UTF-8 text\n"
+
+
+def test_asks_for_text_instead_of_waiting_on_a_keyboard(kokoro, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", Terminal())
+    with pytest.raises(SystemExit) as exit:
+        cli.main([])
+    assert exit.value.code == 2
+
+
+def test_listing_voices_never_reads_stdin(kokoro, monkeypatch, capsys):
+    class Unreadable(io.StringIO):
+        def read(self, *args):
+            raise AssertionError("listing the voices read stdin")
+
+    monkeypatch.setattr(sys, "stdin", Unreadable())
+    assert cli.main(["--list-voices"]) == 0
+    assert "af_heart" in capsys.readouterr().out
+
+
 def test_plays_when_there_is_no_output_file(kokoro, output):
     assert cli.main(["Hello", "-s", "1.2"]) == 0
     assert kokoro.calls[0][2] == 1.2
@@ -182,7 +254,7 @@ def test_lists_voices(kokoro, capsys, argv):
     "argv",
     [
         ["Hello", "-v", "nope"],  # unknown voice
-        [],  # no text
+        ["Hello", "-f", "notes.txt"],  # text or a file, not both
         ["Hello", "-s", "3"],  # speed out of range
         ["--voices", "bf_emma", "Hello"],  # not an option
         ["Hello", "--stream", "-o", "hello.wav"],  # plays or saves, not both

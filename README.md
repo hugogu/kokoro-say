@@ -27,8 +27,8 @@ account, no GPU, and no network once the model is cached.
 ```sh
 ksay "Hello there."                          # speak it
 ksay -v bf_emma "Good evening." -o hi.mp3    # save it (.wav, .flac, .ogg or .mp3)
-echo "Read from a pipe." | ksay -            # read standard input
-ksay --stream - < chapter.txt                # start speaking before the text is finished
+echo "Read from a pipe." | ksay              # read standard input
+ksay -f chapter.txt --stream                 # start speaking before the text is finished
 ```
 
 ## Hear it
@@ -98,18 +98,20 @@ keep it elsewhere, for example one folder shared by several accounts.
 ksay "Hello there."                          # speak it
 ksay -v bf_emma -s 1.1 "Good evening."       # another voice, a little faster
 ksay "Save me." -o save.mp3                  # write a file instead of playing
-cat chapter.txt | ksay --stream -            # read standard input, speaking at once
+ksay -f chapter.txt                          # read the text from a file
+cat chapter.txt | ksay --stream              # read standard input, speaking at once
 ksay -v '?'                                  # list the voices
 ```
 
 ```text
-ksay [text | -] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
+ksay [text | -] [-f FILE] [-o FILE | --stream] [-v VOICE] [-s SPEED] [-l LANG]
      [--list-voices] [--model-dir DIR]
 ```
 
 | Option | Meaning |
 | --- | --- |
-| `text`, `-` | What to say; `-` reads standard input |
+| `text`, `-` | What to say; `-` reads standard input, and so does leaving it out when input is piped |
+| `-f FILE`, `--input-file FILE` | Read the text from a UTF-8 file; `-` reads standard input |
 | `-o FILE` | Save to `.wav`, `.flac`, `.ogg` or `.mp3` instead of playing |
 | `--stream` | Start speaking before the whole text has been generated |
 | `-v VOICE` | Voice name (default `af_heart`); `-v '?'` lists them |
