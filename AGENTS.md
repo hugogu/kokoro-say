@@ -70,6 +70,13 @@
   is over 150 characters, so `chinese.front_ends()` must run after `load_kokoro`, which
   shortens it. The pause after a sentence is read from the phonemes, because the
   Chinese full stop is not one of the marks kokoro-onnx pauses on.
+- The video scripts need an ffmpeg with the `drawtext` filter, which means libfreetype. On
+  the test Mac the arm64 Homebrew ffmpeg 9.0.2 has none, and 9 also dropped
+  `-filter_complex_script`; the x86_64 one under `/usr/local` (7.1) works, so run them as
+  `PATH=/usr/local/bin:$PATH uv run ...`. Check a change to a video script by hashing the
+  decoded frames (`ffmpeg -i f.mp4 -map 0:v -f framemd5 -`): the English comparison video
+  came out identical after the render code was made reusable. The Chinese captions use
+  Hiragino Sans GB, a macOS system font, as the other videos use Menlo and Helvetica Neue.
 - `speaker()` gives SIGINT its default action while ksay generates and
   plays speech. Python's KeyboardInterrupt would wait for the batch onnxruntime
   is synthesizing, which cannot be interrupted, and a process that exits with
@@ -183,9 +190,13 @@
   player, and the raw file is served with `content-disposition: attachment`, so a link
   to a clip downloads it. The only inline player is a bare
   `https://github.com/user-attachments/assets/<uuid>` line: an MP4 uploaded through
-  GitHub's own editor, for which there is no API. `docs/audio/intro.mp4` and
-  `compare.mp4` are rendered for that and not committed; the two URLs in the README
-  belong to the videos rendered on 2026-10-08, so re-rendering means uploading again.
+  GitHub's own editor, for which there is no API. `docs/audio/intro.mp4`, `compare.mp4`
+  and `chinese.mp4` are rendered for that and not committed; the URLs in the README
+  belong to the videos as rendered, so re-rendering means uploading again.
+  Committing an MP4 does not help: GitHub's markdown renderer
+  (`gh api -X POST /markdown -f mode=gfm -f context=OWNER/REPO -f text=...`) leaves a bare
+  raw or blob URL as a link, drops a `<video>` tag and turns `![]()` into a broken image,
+  and the file page of a committed MP4 has no player either, only "View raw".
   With a logged-in browser the upload needs no submitted issue: open `/issues/new`,
   patch `HTMLInputElement.prototype.click` so that the file input GitHub creates when
   "Add Files" is pressed is attached to the page instead of opening a native dialog,
