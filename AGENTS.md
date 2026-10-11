@@ -74,6 +74,14 @@
   ones, which its author calls an early release and "not a strict upgrade". Untried.
   Voices do best on 100 to 200 tokens and are weak under 10 to 20, which matters for
   short sentences in `--stream`.
+- Kokoro itself is frozen; its runtime is not (checked 2026-10-11). hexgrad's last model
+  update is 2025-04-10 (v1.1-zh: 2025-03-04), `kokoro` and `misaki` both sit at 0.9.4 on PyPI
+  from 2025-04-05, the GitHub pushes after that (to August 2025) were community pull requests,
+  hexgrad has no public GitHub events in the last 90 days, and no successor was announced.
+  Downloads are still about 10.8 million a month and kokoro-onnx, ksay's runtime, released 0.6.0
+  and 0.6.1 in August 2026. misaki's main branch allows Python before 3.14 (the 3.13 commit of
+  2025-08-11) while PyPI's 0.9.4 says before 3.13, so a git dependency on misaki would lift the
+  `zh` cap to 3.13, not to 3.14.
 - The extra is optional because misaki declares `Requires-Python <3.13` (0.9.4, from
   April 2025, is its latest release) and its dependencies weigh about 100 MB installed
   (pypinyin-dict 43 MB, jieba 37 MB, misaki 14 MB). `uv run` does not remove packages it
