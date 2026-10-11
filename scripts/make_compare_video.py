@@ -135,7 +135,6 @@ def main() -> int:
             + ",".join(filters)
             + "[v]"
         )
-        (folder / "graph.txt").write_text(graph)
         target = AUDIO / "compare.mp4"
         subprocess.run(
             [
@@ -150,8 +149,8 @@ def main() -> int:
                 ROOT / "docs" / "logo" / "ksay-logo-dark.png",
             ]
             + [
-                "-filter_complex_script",
-                folder / "graph.txt",
+                "-filter_complex",
+                graph,
                 "-map",
                 "[v]",
                 "-map",

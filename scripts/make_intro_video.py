@@ -205,14 +205,13 @@ def main() -> int:
             + ",".join(filters)
             + "[v]"
         )
-        (folder / "graph.txt").write_text(graph)
         target = AUDIO / "intro.mp4"
         subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", mp3]
             + ["-i", ROOT / "docs" / "logo" / "ksay-logo-dark.png"]
             + [
-                "-filter_complex_script",
-                folder / "graph.txt",
+                "-filter_complex",
+                graph,
                 "-map",
                 "[v]",
                 "-map",
