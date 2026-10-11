@@ -105,7 +105,20 @@ def drawtext(folder: Path, name: str, text: str, font: Path, **options: object) 
     return "drawtext=" + ":".join(f"{key}={value}" for key, value in settings.items())
 
 
+def require_drawtext() -> None:
+    """Stop with the reason when ffmpeg cannot draw text, which needs libfreetype."""
+    filters = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True
+    ).stdout
+    if " drawtext " not in filters:
+        raise SystemExit(
+            "this ffmpeg has no drawtext filter (it was built without libfreetype); "
+            "put one that has it first on PATH"
+        )
+
+
 def main() -> int:
+    require_drawtext()
     for font in (MONO, SANS):
         if not font.exists():
             raise SystemExit(f"{font} not found; this script needs macOS system fonts")

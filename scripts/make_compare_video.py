@@ -26,7 +26,7 @@ from math import gcd
 from pathlib import Path
 
 from make_audio import AUDIO, PASSAGES, ROOT
-from make_intro_video import MONO, SANS, drawtext
+from make_intro_video import MONO, SANS, drawtext, require_drawtext
 
 RATE = 24_000
 SPEAKERS = [("ksay", "ksay", "0x3fb950"), ("espeak-ng", "eSpeak NG", "0xf0883e")]
@@ -34,6 +34,7 @@ LEAD_IN, BETWEEN_VOICES, BETWEEN_PASSAGES = 0.8, 0.6, 1.4
 
 
 def main() -> int:
+    require_drawtext()
     import numpy as np
     import soundfile as sf
     from scipy.signal import resample_poly
