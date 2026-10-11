@@ -4,6 +4,7 @@
 GitHub plays inline only a video uploaded through its own editor (see
 make_intro_video.py), so the comparison clips from make_audio.py are strung together
 into one video: the passage on screen, a label for who is speaking, and a waveform.
+render() does that for any set of clips; make_chinese_video.py uses it too.
 
     uv run scripts/make_audio.py
     uv run scripts/make_compare_video.py
@@ -33,7 +34,22 @@ SPEAKERS = [("ksay", "ksay", "0x3fb950"), ("espeak-ng", "eSpeak NG", "0xf0883e")
 LEAD_IN, BETWEEN_VOICES, BETWEEN_PASSAGES = 0.8, 0.6, 1.4
 
 
-def main() -> int:
+def render(
+    clips: Path,
+    passages: dict[str, str],
+    speakers: list[tuple[str, str, str]],
+    title: str,
+    subtitle: str,
+    text_font: Path,
+    wrap: int,
+    target: Path,
+) -> None:
+    """Make a video of every speaker reading every passage, from the MP3s in `clips`.
+
+    The clips are named `<speaker>-<passage>.mp3`. Each speaker is a clip prefix, the
+    label shown while it speaks and the color of that label; `wrap` is the width of a
+    line of the passage in characters.
+    """
     require_drawtext()
     import numpy as np
     import soundfile as sf
@@ -54,17 +70,15 @@ def main() -> int:
         add(np.zeros(int(seconds * RATE), dtype="float32"))
 
     pause(LEAD_IN)
-    for name, text in PASSAGES.items():
+    for name, text in passages.items():
         passage_start = clock
-        for index, (folder, label, color) in enumerate(SPEAKERS):
-            wave, rate = sf.read(
-                AUDIO / "compare" / f"{folder}-{name}.mp3", dtype="float32"
-            )
+        for index, (prefix, label, color) in enumerate(speakers):
+            wave, rate = sf.read(clips / f"{prefix}-{name}.mp3", dtype="float32")
             divisor = gcd(RATE, rate)
             start = clock
             add(resample_poly(wave, RATE // divisor, rate // divisor).astype("float32"))
             speaking.append((label, color, start, clock))
-            if index < len(SPEAKERS) - 1:
+            if index < len(speakers) - 1:
                 pause(BETWEEN_VOICES)
         shown.append((text, passage_start - 0.2, clock + BETWEEN_PASSAGES / 2))
         pause(BETWEEN_PASSAGES)
@@ -79,7 +93,7 @@ def main() -> int:
             + drawtext(
                 folder,
                 "title",
-                "ksay or eSpeak NG?",
+                title,
                 MONO,
                 x=80,
                 y=44,
@@ -89,7 +103,7 @@ def main() -> int:
             drawtext(
                 folder,
                 "sub",
-                "The same text, the same loudness",
+                subtitle,
                 SANS,
                 x=80,
                 y=124,
@@ -102,8 +116,8 @@ def main() -> int:
                 drawtext(
                     folder,
                     f"text{i}",
-                    "\n".join(textwrap.wrap(text, 46)),
-                    SANS,
+                    "\n".join(textwrap.wrap(text, wrap)),
+                    text_font,
                     x=80,
                     y=250,
                     fontsize=40,
@@ -136,7 +150,6 @@ def main() -> int:
             + ",".join(filters)
             + "[v]"
         )
-        target = AUDIO / "compare.mp4"
         subprocess.run(
             [
                 "ffmpeg",
@@ -181,6 +194,19 @@ def main() -> int:
         )
     size = target.stat().st_size / 1024
     print(f"{target.relative_to(ROOT)}  {size:.0f} KB  {duration:.1f} s")
+
+
+def main() -> int:
+    render(
+        AUDIO / "compare",
+        PASSAGES,
+        SPEAKERS,
+        "ksay or eSpeak NG?",
+        "The same text, the same loudness",
+        SANS,
+        46,
+        AUDIO / "compare.mp4",
+    )
     return 0
 
 
