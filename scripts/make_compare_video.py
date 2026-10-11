@@ -116,7 +116,7 @@ def render(
                 drawtext(
                     folder,
                     f"text{i}",
-                    "\n".join(textwrap.wrap(text, wrap)),
+                    "\n".join(textwrap.wrap(text, wrap, break_on_hyphens=False)),
                     text_font,
                     x=80,
                     y=250,
