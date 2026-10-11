@@ -198,6 +198,13 @@ needs Python 3.12 or older, because that is all `misaki` supports. Without it `k
 so and falls back to eSpeak NG. Chinese text given to an English voice, which is the
 default, gets a hint to use a Chinese one.
 
+Kokoro is an English-first model. Its author grades all eight Mandarin voices D overall,
+with 1 to under 10 hours of Mandarin in the whole training set (10 to under 100 minutes
+per voice), against A for the best English voices
+([VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)), so expect
+an accent. The front end adds to it a little: third-tone sandhi is not applied, so 我很好,
+spoken wó hén hǎo, is written with three dipping tones.
+
 Judged by ear on three mixed sentences, `ksay` keeps one voice for the English words and
 says JSON as a word, where `say`'s Tingting voices change to a second voice for them and
 read JSON as letters (a recognizer transcribes `say -v Tingting` as "j, s, o, n"). That

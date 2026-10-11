@@ -62,6 +62,18 @@
   the wrong judge of code-switching: it can settle what was said, not how it sounds.
   Run any recognizer at temperature 0: with sampling the same file scored 4 of 4 once and
   0 of 4 the next time. `say`'s Chinese voices caught 0 to 3 of 4.
+- Kokoro is English-first, so the accent is mostly the model. VOICES.md grades all eight
+  v1.0 Mandarin voices D (target quality C, 10 to 100 minutes each, 1 to 10 hours of Mandarin
+  in all) against A for af_heart, and warns that non-English support "may be absent or thin".
+  The legacy misaki path adds no third-tone sandhi: 我很好 comes out 3+3+3 (pypinyin does
+  the 不 and 一 changes, and its `tone_sandhi=True` fixes only 你好). misaki's 1.1 front
+  end applies sandhi but writes bopomofo and tone digits for the v1.1-zh model's own
+  vocabulary, so it cannot drive the v1.0 voices. That model is `kokoro-v1.1-zh.onnx`
+  (325.5 MB) and `voices-v1.1-zh.bin` (53.8 MB) in kokoro-onnx's model-files-v1.1
+  release: over 100 hours, 100 Chinese voices from a professional dataset and 3 English
+  ones, which its author calls an early release and "not a strict upgrade". Untried.
+  Voices do best on 100 to 200 tokens and are weak under 10 to 20, which matters for
+  short sentences in `--stream`.
 - The extra is optional because misaki declares `Requires-Python <3.13` (0.9.4, from
   April 2025, is its latest release) and its dependencies weigh about 100 MB installed
   (pypinyin-dict 43 MB, jieba 37 MB, misaki 14 MB). `uv run` does not remove packages it
